@@ -1,0 +1,568 @@
+import 'package:flutter/material.dart';
+import '../models/user_profile.dart';
+import '../state/app_state.dart';
+import 'projects_screen.dart';
+
+/// Shell principal pós-autenticação:
+/// - AppBar com perfil ativo (ADMIN / TÉCNICO / EMPRESA), troca rápida de perfil e inspetor de Token JWT
+/// - Barra Superior de Modo Demonstração (Online/Offline, Simular Falha de Rede AM-12, Simular Conflito AM-04)
+/// - NavigationBar inferior com as 5 seções do sistema (Aba 1 "Projetos & Áreas" 100% funcional na Fase 1)
+class HomeShellScreen extends StatefulWidget {
+  final AppState appState;
+
+  const HomeShellScreen({
+    super.key,
+    required this.appState,
+  });
+
+  @override
+  State<HomeShellScreen> createState() => _HomeShellScreenState();
+}
+
+class _HomeShellScreenState extends State<HomeShellScreen> {
+  int _selectedTabIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final user = widget.appState.currentUser!;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF3F7F4),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1B5E20),
+        foregroundColor: Colors.white,
+        titleSpacing: 14,
+        title: Row(
+          children: [
+            const Icon(Icons.eco_rounded, color: Color(0xFFA5D6A7), size: 22),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Monitoramento Muda & PSA',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    '${user.name} (${user.email})',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: Color(0xFFC8E6C9),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          // Badge de Perfil (AM-01) com menu de troca rápida para demonstração
+          PopupMenuButton<UserRole>(
+            key: const Key('profile_switcher_menu'),
+            tooltip: 'Trocar Perfil de Acesso (Demonstração AM-01)',
+            onSelected: (role) {
+              widget.appState.quickLoginAsRole(role);
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem<UserRole>(
+                enabled: false,
+                child: Text(
+                  'Alternar Perfil Instantaneamente (AM-01)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1B5E20),
+                  ),
+                ),
+              ),
+              const PopupMenuDivider(),
+              ...UserRole.values.map(
+                (role) => PopupMenuItem<UserRole>(
+                  key: Key('switch_role_${role.name}'),
+                  value: role,
+                  child: Row(
+                    children: [
+                      Icon(role.icon, color: role.badgeColor, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          role.label,
+                          style: TextStyle(
+                            fontWeight: user.role == role
+                                ? FontWeight.w800
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      if (user.role == role)
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          color: Color(0xFF2E7D32),
+                          size: 16,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: user.role.badgeColor,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.5)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(user.role.icon, size: 14, color: Colors.white),
+                  const SizedBox(width: 5),
+                  Text(
+                    user.role.shortBadge,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  const Icon(
+                    Icons.arrow_drop_down_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          IconButton(
+            key: const Key('jwt_inspector_button'),
+            tooltip: 'Inspecionar Token JWT e Permissões',
+            icon: const Icon(Icons.vpn_key_rounded, size: 20),
+            onPressed: () => _showJwtInspectorDialog(context),
+          ),
+          IconButton(
+            key: const Key('logout_button'),
+            tooltip: 'Encerrar Sessão (Logout)',
+            icon: const Icon(Icons.logout_rounded, size: 20),
+            onPressed: () => widget.appState.logout(),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          _buildDemoModeTopBar(context),
+          Expanded(
+            child: _buildCurrentTabBody(context, user),
+          ),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        key: const Key('main_bottom_navigation'),
+        selectedIndex: _selectedTabIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            _selectedTabIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.folder_special_outlined),
+            selectedIcon: Icon(Icons.folder_special_rounded),
+            label: 'Projetos & Áreas',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.add_location_alt_outlined),
+            selectedIcon: Icon(Icons.add_location_alt_rounded),
+            label: 'Coleta Campo',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.sync_outlined),
+            selectedIcon: Icon(Icons.sync_rounded),
+            label: 'Sincronização',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.map_outlined),
+            selectedIcon: Icon(Icons.map_rounded),
+            label: 'Mapa & Histórico',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.insights_outlined),
+            selectedIcon: Icon(Icons.insights_rounded),
+            label: 'Indicadores',
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Barra de Modo Demonstração (Online/Offline, Falha de Rede AM-12, Conflito AM-04)
+  Widget _buildDemoModeTopBar(BuildContext context) {
+    final isOnline = widget.appState.isOnline;
+    final simFail = widget.appState.simulateNetworkFailure;
+    final simConflict = widget.appState.simulateConflictOnNextSync;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: isOnline ? const Color(0xFF0D3B1E) : const Color(0xFF4E342E),
+        border: const Border(
+          bottom: BorderSide(color: Color(0xFF1B5E20)),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            const Icon(
+              Icons.science_outlined,
+              color: Color(0xFFA5D6A7),
+              size: 16,
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              'MODO DEMONSTRAÇÃO:',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.4,
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Toggle Online / Offline
+            _buildDemoToggleChip(
+              chipKey: const Key('demo_toggle_online'),
+              icon: isOnline ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
+              label: isOnline ? 'Status: ONLINE' : 'Status: OFFLINE (Campo)',
+              active: isOnline,
+              activeColor: const Color(0xFF2E7D32),
+              inactiveColor: const Color(0xFFD84315),
+              onTap: () => widget.appState.toggleOnlineStatus(),
+            ),
+            const SizedBox(width: 8),
+            // Toggle Simular Falha de Rede (AM-12)
+            _buildDemoToggleChip(
+              chipKey: const Key('demo_toggle_net_fail'),
+              icon: Icons.wifi_tethering_error_rounded,
+              label: simFail
+                  ? 'Falha Rede AM-12: ATIVA'
+                  : 'Simular Falha Rede (AM-12)',
+              active: simFail,
+              activeColor: const Color(0xFFC62828),
+              inactiveColor: const Color(0xFF37474F),
+              onTap: () => widget.appState.toggleSimulateNetworkFailure(),
+            ),
+            const SizedBox(width: 8),
+            // Toggle Simular Conflito de Sincronização (AM-04)
+            _buildDemoToggleChip(
+              chipKey: const Key('demo_toggle_conflict'),
+              icon: Icons.merge_type_rounded,
+              label: simConflict
+                  ? 'Conflito Sync AM-04: ATIVO'
+                  : 'Simular Conflito (AM-04)',
+              active: simConflict,
+              activeColor: const Color(0xFFEF6C00),
+              inactiveColor: const Color(0xFF37474F),
+              onTap: () => widget.appState.toggleSimulateConflictOnNextSync(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDemoToggleChip({
+    required Key chipKey,
+    required IconData icon,
+    required String label,
+    required bool active,
+    required Color activeColor,
+    required Color inactiveColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      key: chipKey,
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: active ? activeColor : inactiveColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: Colors.white),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCurrentTabBody(BuildContext context, AppUser user) {
+    switch (_selectedTabIndex) {
+      case 0:
+        return ProjectsScreen(appState: widget.appState);
+      case 1:
+        return _buildUpcomingPhasePreview(
+          icon: Icons.add_location_alt_rounded,
+          phaseBadge: 'ESTRUTURA PRONTA PARA A FASE 2',
+          title: 'Coleta em Campo Offline, GPS, Fotos e Checklists (AM-03, AM-05, AM-07, AM-08)',
+          description:
+              'Esta aba receberá na Fase 2 o formulário de registro de campo com captura GPS em tempo real, validação de consistência hidrológica/florestal, anexo de fotos com metadados e checklists técnicos por tipo de atividade.',
+          currentRoleNote: user.canRegisterFieldData
+              ? 'Seu perfil atual (${user.role.label}) possui permissão de escrita em campo habilitada.'
+              : 'Atenção (AM-01): O perfil ${user.role.label} possui acesso somente leitura e não poderá gravar coletas.',
+        );
+      case 2:
+        return _buildUpcomingPhasePreview(
+          icon: Icons.sync_rounded,
+          phaseBadge: 'ESTRUTURA PRONTA PARA A FASE 2',
+          title: 'Fila Offline-First, Resolução de Conflitos e Auditoria (AM-04, AM-09, AM-12)',
+          description:
+              'Esta aba exibirá na Fase 2 a fila de sincronização SQLite (Pendente, Sincronizado, Conflito, Erro de Rede), o comparador lado a lado para resolução de conflitos de versão e a trilha de auditoria completa por usuário/data.',
+          currentRoleNote:
+              'Use os botões da Barra de Modo Demonstração no topo para testar estados Online/Offline, Falha de Rede e Conflitos.',
+        );
+      case 3:
+        return _buildUpcomingPhasePreview(
+          icon: Icons.map_rounded,
+          phaseBadge: 'ESTRUTURA PRONTA PARA A FASE 3',
+          title: 'Mapa Interativo de Pontos/Áreas e Histórico Comparativo (AM-06, AM-10)',
+          description:
+              'Os ${widget.appState.properties.length} polígonos de propriedades rurais e ${widget.appState.collectionPoints.length} pontos de coleta já estão georreferenciados no banco SQLite e serão plotados no mapa interativo com comparador entre visitas na Fase 3.',
+          currentRoleNote:
+              'Você já pode consultar as coordenadas e propriedades na aba "Projetos & Áreas".',
+        );
+      case 4:
+      default:
+        return _buildUpcomingPhasePreview(
+          icon: Icons.insights_rounded,
+          phaseBadge: 'ESTRUTURA PRONTA PARA A FASE 4',
+          title: 'Painel de Indicadores Ambientais e Exportação PDF/CSV (AM-11)',
+          description:
+              'Esta aba apresentará gráficos de evolução da recomposição florestal, qualidade da água (turbidez/vazão), execução física-financeira e geração nativa de Relatório Técnico em PDF e planilha CSV.',
+          currentRoleNote:
+              'Relatórios respeitarão automaticamente o filtro de sigilo do perfil ${user.role.label}.',
+        );
+    }
+  }
+
+  Widget _buildUpcomingPhasePreview({
+    required IconData icon,
+    required String phaseBadge,
+    required String title,
+    required String description,
+    required String currentRoleNote,
+  }) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500),
+          child: Card(
+            elevation: 0,
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: const BorderSide(color: Color(0xFFD5E2D9)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E9),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Icon(
+                      icon,
+                      size: 40,
+                      color: const Color(0xFF1B5E20),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1B5E20),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      phaseBadge,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF16301D),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    description,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF496050),
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F8F5),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFD5E2D9)),
+                    ),
+                    child: Text(
+                      currentRoleNote,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1B5E20),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _selectedTabIndex = 0;
+                      });
+                    },
+                    icon: const Icon(Icons.folder_special_rounded, size: 18),
+                    label: const Text('Voltar para Projetos & Áreas (Fase 1)'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showJwtInspectorDialog(BuildContext context) {
+    final user = widget.appState.currentUser!;
+    final token = widget.appState.activeJwtToken ?? '';
+    final payload = JwtAuthSimulator.decodePayload(token);
+
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.security_rounded, color: Color(0xFF1B5E20)),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Sessão JWT & Permissões (AM-01)',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Usuário: ${user.name}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              Text('Perfil Ativo: ${user.role.label} (${user.role.shortBadge})'),
+              Text('Organização: ${user.organization}'),
+              Text('Matrícula/Registro: ${user.registrationCode}'),
+              const Divider(height: 20),
+              const Text(
+                'Escopos de Segurança no Payload JWT:',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '• Acesso a Dados Sigilosos (AM-01): ${payload['confidential_access'] == true ? 'AUTORIZADO' : 'BLOQUEADO (Somente Dados Abertos)'}',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: payload['confidential_access'] == true
+                      ? const Color(0xFF1B5E20)
+                      : const Color(0xFFE65100),
+                ),
+              ),
+              Text(
+                '• Escrita e Coleta em Campo: ${payload['field_write_access'] == true ? 'HABILITADA' : 'SOMENTE LEITURA'}',
+                style: const TextStyle(fontSize: 12.5),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Token JWT Assinado (HMAC-SHA256):',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F2),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFD0DDD4)),
+                ),
+                child: SelectableText(
+                  token,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 10.5,
+                    color: Color(0xFF1B3A24),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Fechar'),
+          ),
+        ],
+      ),
+    );
+  }
+}

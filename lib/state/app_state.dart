@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../models/field_form_record.dart';
 import '../models/project_models.dart';
 import '../models/user_profile.dart';
+import '../models/water_soil_models.dart';
 import '../services/database_service.dart';
 import '../services/mock_api_sync_service.dart';
 
@@ -12,6 +13,7 @@ import '../services/mock_api_sync_service.dart';
 /// - Barra de Modo Demonstração (Online/Offline, Falha de Rede AM-12, Conflito AM-04)
 /// - Consulta de Projetos Muda/PSA, Propriedades, Áreas, Etapas, Cronogramas e Documentos (AM-02)
 /// - Coleta em Campo Offline, GPS, Fotos Georreferenciadas, Fila de Sincronização, Conflitos e Auditoria (AM-03, AM-04, AM-05, AM-11, AM-12)
+/// - Mapa Interativo (Polígonos, KML, Croqui Técnico e Pontos), Análises de Água CONAMA 357/2005 e Unidades Modelo de Conservação do Solo (AM-06, AM-07, AM-10)
 class AppState extends ChangeNotifier {
   final DatabaseService _dbService;
   final MockApiSyncService _syncService;
@@ -51,6 +53,9 @@ class AppState extends ChangeNotifier {
   List<RuralProperty> _properties = [];
   List<CollectionPoint> _collectionPoints = [];
   List<FieldFormRecord> _fieldForms = [];
+  List<WaterQualityAnalysis> _waterAnalyses = [];
+  List<SoilConservationUnit> _soilUnits = [];
+  List<ProcessedKmlOverlay> _kmlOverlays = [];
 
   bool get isInitialized => _isInitialized;
   bool get isLoading => _isLoading;
@@ -77,6 +82,9 @@ class AppState extends ChangeNotifier {
   List<RuralProperty> get properties => _properties;
   List<CollectionPoint> get collectionPoints => _collectionPoints;
   List<FieldFormRecord> get fieldForms => _fieldForms;
+  List<WaterQualityAnalysis> get waterAnalyses => _waterAnalyses;
+  List<SoilConservationUnit> get soilUnits => _soilUnits;
+  List<ProcessedKmlOverlay> get kmlOverlays => _kmlOverlays;
 
   /// Quantidade de registros pendentes ou com falha de rede na fila local (AM-04 / AM-12).
   int get pendingSyncCount =>
@@ -168,6 +176,9 @@ class AppState extends ChangeNotifier {
     _properties = await _dbService.getProperties();
     _collectionPoints = await _dbService.getCollectionPoints();
     _fieldForms = await _dbService.getFieldForms();
+    _waterAnalyses = await _dbService.getWaterAnalyses();
+    _soilUnits = await _dbService.getSoilConservationUnits();
+    _kmlOverlays = _dbService.getProcessedKmlOverlays();
   }
 
   /// Login via e-mail e senha validado contra o banco SQLite + emissão de Token JWT (AM-01).
@@ -499,6 +510,162 @@ class AppState extends ChangeNotifier {
         : 'Conflito resolvido (AM-04): Aceita a revisão da plataforma central (v${resolved.version}) e registrada autoria no histórico (AM-11).';
     notifyListeners();
     return resolved;
+  }
+
+  // ===========================================================================
+  // MÉTODOS DA FASE 3: MAPA INTERATIVO (AM-06), QUALIDADE DA ÁGUA CONAMA 357/2005 (AM-07)
+  // E UNIDADES MODELO DE CONSERVAÇÃO DO SOLO (AM-10)
+  // ===========================================================================
+
+  List<WaterQualityAnalysis> getWaterAnalysesForPoint(String pointId) {
+    return _waterAnalyses.where((w) => w.pointId == pointId).toList();
+  }
+
+  List<WaterQualityAnalysis> getWaterAnalysesForProject(String projectId) {
+    return _waterAnalyses.where((w) => w.projectId == projectId).toList();
+  }
+
+  List<SoilConservationUnit> getSoilUnitsForProject(String projectId) {
+    return _soilUnits.where((u) => u.projectId == projectId).toList();
+  }
+
+  List<SoilConservationUnit> getSoilUnitsForProperty(String propertyId) {
+    return _soilUnits.where((u) => u.propertyId == propertyId).toList();
+  }
+
+  List<FieldFormRecord> getFieldFormsForPoint(String pointId) {
+    return _fieldForms.where((f) => f.pointId == pointId).toList();
+  }
+
+  ProcessedKmlOverlay? getKmlOverlayForProperty(String propertyId) {
+    for (final kml in _kmlOverlays) {
+      if (kml.propertyId == propertyId) return kml;
+    }
+    return null;
+  }
+
+  /// Registra um novo laudo de análise de qualidade da água (CONAMA 357/2005 - AM-07).
+  Future<WaterQualityAnalysis?> saveWaterQualityAnalysis({
+    required String projectId,
+    required String propertyId,
+    required String pointId,
+    required String reportCode,
+    required String sampleDate,
+    required String campaignName,
+    required String laboratoryName,
+    required double ph,
+    required double turbidityUnt,
+    required double dissolvedOxygenMgL,
+    required double dboMgL,
+    required double totalPhosphorusMgL,
+    required int thermotolerantColiformsNmp,
+    required double waterTemperatureC,
+    required double flowRateLs,
+    required String technicalConclusion,
+    required bool isConfidentialReport,
+    required String confidentialLabNotes,
+  }) async {
+    final user = _currentUser;
+    if (user == null || !user.canRegisterFieldData) {
+      _lastSyncMessage =
+          'Operação bloqueada (AM-01): O perfil atual não possui permissão para registrar laudos de água.';
+      notifyListeners();
+      return null;
+    }
+
+    final analysis = WaterQualityAnalysis(
+      id: 'wat-${DateTime.now().microsecondsSinceEpoch}',
+      projectId: projectId,
+      propertyId: propertyId,
+      pointId: pointId,
+      reportCode: reportCode,
+      sampleDate: sampleDate,
+      campaignName: campaignName,
+      laboratoryName: laboratoryName,
+      ph: ph,
+      turbidityUnt: turbidityUnt,
+      dissolvedOxygenMgL: dissolvedOxygenMgL,
+      dboMgL: dboMgL,
+      totalPhosphorusMgL: totalPhosphorusMgL,
+      thermotolerantColiformsNmp: thermotolerantColiformsNmp,
+      waterTemperatureC: waterTemperatureC,
+      flowRateLs: flowRateLs,
+      technicalConclusion: technicalConclusion,
+      isConfidentialReport: isConfidentialReport,
+      confidentialLabNotes: confidentialLabNotes,
+      responsibleAnalyst: '${user.name} (${user.registrationCode})',
+      createdAt: DateTime.now().toUtc().toIso8601String(),
+    );
+
+    await _dbService.upsertWaterAnalysis(analysis);
+    _waterAnalyses = await _dbService.getWaterAnalyses();
+    _lastSyncMessage = analysis.isConamaCompliant
+        ? 'Laudo ${analysis.reportCode} registrado (AM-07): 100% CONFORME CONAMA 357/2005 Classe 2.'
+        : 'Laudo ${analysis.reportCode} registrado (AM-07): ALERTA — ${analysis.violations.length} parâmetro(s) acima do limite CONAMA 357/2005.';
+    notifyListeners();
+    return analysis;
+  }
+
+  /// Registra uma nova Unidade Modelo de Conservação do Solo (AM-10).
+  Future<SoilConservationUnit?> saveSoilConservationUnit({
+    required String projectId,
+    required String propertyId,
+    required String pointId,
+    required String code,
+    required String name,
+    required double areaHa,
+    required String soilClass,
+    required double slopePercent,
+    required List<String> adoptedPractices,
+    required double vegetalCoverPercent,
+    required double baselineErosionTonHaYear,
+    required double currentErosionTonHaYear,
+    required int infiltrationBasinsCount,
+    required String conservationLevel,
+    required String lastEvaluationDate,
+    required String technicalNotes,
+    required String confidentialOwnerAgreement,
+  }) async {
+    final user = _currentUser;
+    if (user == null || !user.canRegisterFieldData) {
+      _lastSyncMessage =
+          'Operação bloqueada (AM-01): O perfil atual não possui permissão para cadastrar unidades de conservação do solo.';
+      notifyListeners();
+      return null;
+    }
+
+    final abatement = (baselineErosionTonHaYear - currentErosionTonHaYear)
+        .clamp(0.0, double.infinity);
+
+    final unit = SoilConservationUnit(
+      id: 'soil-${DateTime.now().microsecondsSinceEpoch}',
+      projectId: projectId,
+      propertyId: propertyId,
+      pointId: pointId,
+      code: code,
+      name: name,
+      areaHa: areaHa,
+      soilClass: soilClass,
+      slopePercent: slopePercent,
+      adoptedPractices: adoptedPractices,
+      vegetalCoverPercent: vegetalCoverPercent,
+      baselineErosionTonHaYear: baselineErosionTonHaYear,
+      currentErosionTonHaYear: currentErosionTonHaYear,
+      erosionAbatementTonHaYear: abatement,
+      infiltrationBasinsCount: infiltrationBasinsCount,
+      conservationLevel: conservationLevel,
+      lastEvaluationDate: lastEvaluationDate,
+      technicalNotes: technicalNotes,
+      confidentialOwnerAgreement: confidentialOwnerAgreement,
+      responsibleTechnician: user.name,
+    );
+
+    await _dbService.upsertSoilConservationUnit(unit);
+    _soilUnits = await _dbService.getSoilConservationUnits();
+    _lastSyncMessage =
+        'Unidade Modelo de Solo ${unit.code} registrada (AM-10): abatimento de ${unit.erosionAbatementTonHaYear.toStringAsFixed(1)} t/ha/ano (${unit.erosionReductionPercent.toStringAsFixed(1)}%).';
+    notifyListeners();
+    return unit;
   }
 }
 

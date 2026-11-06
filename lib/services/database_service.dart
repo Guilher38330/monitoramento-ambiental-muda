@@ -3,9 +3,11 @@ import 'package:sqflite/sqflite.dart';
 import '../models/field_form_record.dart';
 import '../models/project_models.dart';
 import '../models/user_profile.dart';
+import '../models/water_soil_models.dart';
 
-/// Serviço de persistência SQLite local (Premissas Comuns + AM-01 a AM-05, AM-11, AM-12).
-/// Contém o Seed Data inicial realista dos Projetos Muda e PSA e da Fila de Coleta Offline.
+/// Serviço de persistência SQLite local (Premissas Comuns + AM-01 a AM-07, AM-10 a AM-12).
+/// Contém o Seed Data inicial realista dos Projetos Muda e PSA, Fila de Coleta Offline,
+/// Análises de Qualidade da Água (CONAMA 357/2005) e Unidades Modelo de Conservação do Solo.
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._internal();
   DatabaseService._internal();
@@ -27,7 +29,7 @@ class DatabaseService {
     }
     _database = await openDatabase(
       customPath,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -35,10 +37,10 @@ class DatabaseService {
 
   Future<Database> _initDatabase() async {
     final dbRoot = await getDatabasesPath();
-    final dbPath = p.join(dbRoot, 'muda_psa_monitoring_v2.db');
+    final dbPath = p.join(dbRoot, 'muda_psa_monitoring_v3.db');
     return openDatabase(
       dbPath,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -57,6 +59,10 @@ class DatabaseService {
           );
         }
       }
+    }
+    if (oldVersion < 3) {
+      await _createPhase3Tables(db);
+      await _seedPhase3DataIfNeeded(db);
     }
   }
 
@@ -94,6 +100,84 @@ class DatabaseService {
         audit_history_json TEXT NOT NULL
       )
     ''');
+  }
+
+  Future<void> _createPhase3Tables(Database db) async {
+    // 7. Tabela de análises e laudos de qualidade da água (CONAMA 357/2005 - AM-07)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS water_analyses (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        property_id TEXT NOT NULL,
+        point_id TEXT NOT NULL,
+        report_code TEXT NOT NULL,
+        sample_date TEXT NOT NULL,
+        campaign_name TEXT NOT NULL,
+        laboratory_name TEXT NOT NULL,
+        ph REAL NOT NULL,
+        turbidity_unt REAL NOT NULL,
+        dissolved_oxygen_mgl REAL NOT NULL,
+        dbo_mgl REAL NOT NULL,
+        total_phosphorus_mgl REAL NOT NULL,
+        thermotolerant_coliforms_nmp INTEGER NOT NULL,
+        water_temperature_c REAL NOT NULL,
+        flow_rate_ls REAL NOT NULL,
+        technical_conclusion TEXT NOT NULL,
+        is_confidential_report INTEGER NOT NULL,
+        confidential_lab_notes TEXT NOT NULL,
+        responsible_analyst TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
+    // 8. Tabela de unidades modelo de conservação do solo (AM-10)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS soil_conservation_units (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        property_id TEXT NOT NULL,
+        point_id TEXT NOT NULL,
+        code TEXT NOT NULL,
+        name TEXT NOT NULL,
+        area_ha REAL NOT NULL,
+        soil_class TEXT NOT NULL,
+        slope_percent REAL NOT NULL,
+        adopted_practices_json TEXT NOT NULL,
+        vegetal_cover_percent REAL NOT NULL,
+        baseline_erosion_ton_ha_year REAL NOT NULL,
+        current_erosion_ton_ha_year REAL NOT NULL,
+        erosion_abatement_ton_ha_year REAL NOT NULL,
+        infiltration_basins_count INTEGER NOT NULL,
+        conservation_level TEXT NOT NULL,
+        last_evaluation_date TEXT NOT NULL,
+        technical_notes TEXT NOT NULL,
+        confidential_owner_agreement TEXT NOT NULL,
+        responsible_technician TEXT NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> _seedPhase3DataIfNeeded(Database db) async {
+    final existingWater = await db.query('water_analyses', limit: 1);
+    if (existingWater.isEmpty) {
+      for (final analysis in _buildSeedWaterAnalyses()) {
+        await db.insert(
+          'water_analyses',
+          analysis.toDbMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    }
+    final existingSoil = await db.query('soil_conservation_units', limit: 1);
+    if (existingSoil.isEmpty) {
+      for (final unit in _buildSeedSoilConservationUnits()) {
+        await db.insert(
+          'soil_conservation_units',
+          unit.toDbMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -189,6 +273,9 @@ class DatabaseService {
     // 6. Tabela local de formulários de campo e fila de sincronização (Fase 2)
     await _createFieldFormsTable(db);
 
+    // 7 e 8. Tabelas de qualidade da água (CONAMA 357/2005 - AM-07) e unidades de conservação do solo (AM-10) (Fase 3)
+    await _createPhase3Tables(db);
+
     await _seedInitialData(db);
   }
 
@@ -231,6 +318,9 @@ class DatabaseService {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     }
+
+    // Seed de Análises de Qualidade da Água (AM-07 - CONAMA 357/2005) e Conservação do Solo (AM-10)
+    await _seedPhase3DataIfNeeded(db);
   }
 
   /// Autentica usuário validando e-mail e hash da senha no SQLite.
@@ -412,6 +502,236 @@ class DatabaseService {
       record.toDbMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+  }
+
+  /// Lista análises de qualidade da água (CONAMA 357/2005 - AM-07), ordenadas das mais recentes para as mais antigas.
+  Future<List<WaterQualityAnalysis>> getWaterAnalyses({
+    String? projectId,
+    String? pointId,
+  }) async {
+    final db = await database;
+    String? whereClause;
+    List<Object?>? whereArgs;
+
+    if (projectId != null && pointId != null) {
+      whereClause = 'project_id = ? AND point_id = ?';
+      whereArgs = [projectId, pointId];
+    } else if (projectId != null) {
+      whereClause = 'project_id = ?';
+      whereArgs = [projectId];
+    } else if (pointId != null) {
+      whereClause = 'point_id = ?';
+      whereArgs = [pointId];
+    }
+
+    final rows = await db.query(
+      'water_analyses',
+      where: whereClause,
+      whereArgs: whereArgs,
+      orderBy: 'created_at DESC',
+    );
+    return rows.map(WaterQualityAnalysis.fromDbMap).toList();
+  }
+
+  /// Insere ou atualiza um laudo de análise de qualidade da água (AM-07).
+  Future<void> upsertWaterAnalysis(WaterQualityAnalysis analysis) async {
+    final db = await database;
+    await db.insert(
+      'water_analyses',
+      analysis.toDbMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Lista unidades modelo de conservação do solo (AM-10).
+  Future<List<SoilConservationUnit>> getSoilConservationUnits({
+    String? projectId,
+    String? propertyId,
+  }) async {
+    final db = await database;
+    String? whereClause;
+    List<Object?>? whereArgs;
+
+    if (projectId != null && propertyId != null) {
+      whereClause = 'project_id = ? AND property_id = ?';
+      whereArgs = [projectId, propertyId];
+    } else if (projectId != null) {
+      whereClause = 'project_id = ?';
+      whereArgs = [projectId];
+    } else if (propertyId != null) {
+      whereClause = 'property_id = ?';
+      whereArgs = [propertyId];
+    }
+
+    final rows = await db.query(
+      'soil_conservation_units',
+      where: whereClause,
+      whereArgs: whereArgs,
+      orderBy: 'code ASC',
+    );
+    return rows.map(SoilConservationUnit.fromDbMap).toList();
+  }
+
+  /// Insere ou atualiza uma unidade modelo de conservação do solo (AM-10).
+  Future<void> upsertSoilConservationUnit(SoilConservationUnit unit) async {
+    final db = await database;
+    await db.insert(
+      'soil_conservation_units',
+      unit.toDbMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Retorna as camadas KML processadas e croquis técnicos georreferenciados das propriedades (AM-06).
+  List<ProcessedKmlOverlay> getProcessedKmlOverlays() {
+    return const [
+      ProcessedKmlOverlay(
+        id: 'kml-muda-01',
+        projectId: 'proj-muda-01',
+        propertyId: 'prop-muda-01',
+        kmlFileName: 'MUDA_RP01_Fazenda_Santa_Ines_Croqui_APP.kml',
+        title: 'Croqui Técnico APP Cabeceira & Talhões T-01 a T-03',
+        layerCategory: 'Croqui Técnico de Talhões',
+        datumcrs: 'SIRGAS 2000 / UTM 22S (EPSG:31982)',
+        processedAt: '15/01/2026 14:20',
+        mappedAreaHa: 54.5,
+        technicalCroquiSummary:
+            'Delimitação vetorial KML da faixa ciliar de 50m do Ribeirão São João, zona de amortecimento da Nascente Principal (raio 50m cercado) e grade de plantio 3x2m.',
+        rawKmlSnippet: '''<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>MUDA_RP01_Fazenda_Santa_Ines_Croqui_APP.kml</name>
+    <Placemark id="T01_APP_Cabeceira">
+      <name>Talhão T-01 — Proteção Hidroambiental Nascente São João</name>
+      <Polygon><outerBoundaryIs><LinearRing>
+        <coordinates>-52.4312,-29.7120,412 -52.4270,-29.7122,408 -52.4272,-29.7150,395 -52.4314,-29.7148,402</coordinates>
+      </LinearRing></outerBoundaryIs></Polygon>
+    </Placemark>
+  </Document>
+</kml>''',
+        overlayPolygon: [
+          GeoCoordinate(latitude: -29.7120, longitude: -52.4312),
+          GeoCoordinate(latitude: -29.7122, longitude: -52.4270),
+          GeoCoordinate(latitude: -29.7150, longitude: -52.4272),
+          GeoCoordinate(latitude: -29.7148, longitude: -52.4314),
+        ],
+        hydrographyPolyline: [
+          GeoCoordinate(latitude: -29.7115, longitude: -52.4310),
+          GeoCoordinate(latitude: -29.7132, longitude: -52.4295),
+          GeoCoordinate(latitude: -29.7158, longitude: -52.4264),
+          GeoCoordinate(latitude: -29.7178, longitude: -52.4242),
+        ],
+      ),
+      ProcessedKmlOverlay(
+        id: 'kml-muda-02',
+        projectId: 'proj-muda-01',
+        propertyId: 'prop-muda-02',
+        kmlFileName: 'MUDA_RP02_Sitio_Araucarias_Nucleacao.kml',
+        title: 'Malha KML de Nucleação & Corredor de Encosta Sinimbu',
+        layerCategory: 'Croqui Técnico de Talhões',
+        datumcrs: 'SIRGAS 2000 / UTM 22S (EPSG:31982)',
+        processedAt: '22/01/2026 09:45',
+        mappedAreaHa: 38.0,
+        technicalCroquiSummary:
+            'Croqui técnico de 28 núcleos de Anderson, poleiros secos e linha de contorno de controle de erosão laminar em encosta íngreme.',
+        rawKmlSnippet: '''<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>MUDA_RP02_Sitio_Araucarias_Nucleacao.kml</name>
+    <Placemark id="Gleba_Nucleacao_02">
+      <name>Gleba Encosta das Araucárias — Regeneração Assistida</name>
+      <Polygon><outerBoundaryIs><LinearRing>
+        <coordinates>-52.5218,-29.5395,525 -52.5170,-29.5398,518 -52.5174,-29.5428,498 -52.5220,-29.5425,510</coordinates>
+      </LinearRing></outerBoundaryIs></Polygon>
+    </Placemark>
+  </Document>
+</kml>''',
+        overlayPolygon: [
+          GeoCoordinate(latitude: -29.5395, longitude: -52.5218),
+          GeoCoordinate(latitude: -29.5398, longitude: -52.5170),
+          GeoCoordinate(latitude: -29.5428, longitude: -52.5174),
+          GeoCoordinate(latitude: -29.5425, longitude: -52.5220),
+        ],
+        hydrographyPolyline: [
+          GeoCoordinate(latitude: -29.5390, longitude: -52.5222),
+          GeoCoordinate(latitude: -29.5408, longitude: -52.5188),
+          GeoCoordinate(latitude: -29.5432, longitude: -52.5162),
+        ],
+      ),
+      ProcessedKmlOverlay(
+        id: 'kml-psa-01',
+        projectId: 'proj-psa-02',
+        propertyId: 'prop-psa-01',
+        kmlFileName: 'PSA_TQ01_Boa_Esperanca_Terracos_Bacias.kml',
+        title: 'Camada KML de Terraços em Nível & 18 Barraginhas PSA',
+        layerCategory: 'Zonas de Recarga PSA',
+        datumcrs: 'SIRGAS 2000 / UTM 22S (EPSG:31982)',
+        processedAt: '10/04/2026 16:10',
+        mappedAreaHa: 64.0,
+        technicalCroquiSummary:
+            'Mapeamento aerofotogramétrico RTK das curvas de nível em base larga, 18 bacias de contenção pluvial e zona de proteção do Olho d\'Água Pedra Branca.',
+        rawKmlSnippet: '''<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>PSA_TQ01_Boa_Esperanca_Terracos_Bacias.kml</name>
+    <Placemark id="Zona_Recarga_Sul">
+      <name>Zonas de Recarga Hídrica Sul &amp; Terraceamento</name>
+      <Polygon><outerBoundaryIs><LinearRing>
+        <coordinates>-52.1958,-29.6035,348 -52.1908,-29.6038,340 -52.1912,-29.6080,328 -52.1960,-29.6078,335</coordinates>
+      </LinearRing></outerBoundaryIs></Polygon>
+    </Placemark>
+  </Document>
+</kml>''',
+        overlayPolygon: [
+          GeoCoordinate(latitude: -29.6035, longitude: -52.1958),
+          GeoCoordinate(latitude: -29.6038, longitude: -52.1908),
+          GeoCoordinate(latitude: -29.6080, longitude: -52.1912),
+          GeoCoordinate(latitude: -29.6078, longitude: -52.1960),
+        ],
+        hydrographyPolyline: [
+          GeoCoordinate(latitude: -29.6030, longitude: -52.1960),
+          GeoCoordinate(latitude: -29.6049, longitude: -52.1941),
+          GeoCoordinate(latitude: -29.6071, longitude: -52.1918),
+          GeoCoordinate(latitude: -29.6092, longitude: -52.1898),
+        ],
+      ),
+      ProcessedKmlOverlay(
+        id: 'kml-psa-02',
+        projectId: 'proj-psa-02',
+        propertyId: 'prop-psa-02',
+        kmlFileName: 'PSA_TQ02_Arroio_Castelhano_Corredor_SAF.kml',
+        title: 'Rede Hidrográfica KML Arroio Castelhano & Corredor SAF',
+        layerCategory: 'Rede Hidrográfica KML',
+        datumcrs: 'SIRGAS 2000 / UTM 22S (EPSG:31982)',
+        processedAt: '19/04/2026 11:05',
+        mappedAreaHa: 78.5,
+        technicalCroquiSummary:
+            'Traçado hidrossedimentológico do Arroio Castelhano, estação fluviométrica PC-PSA-03 e talhões de Sistema Agroflorestal Sucessional.',
+        rawKmlSnippet: '''<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>PSA_TQ02_Arroio_Castelhano_Corredor_SAF.kml</name>
+    <Placemark id="Corredor_SAF_Castelhano">
+      <name>Corredor Agroflorestal Ciliar — Arroio Castelhano</name>
+      <Polygon><outerBoundaryIs><LinearRing>
+        <coordinates>-51.9672,-29.4628,278 -51.9620,-29.4631,272 -51.9624,-29.4670,268 -51.9675,-29.4668,274</coordinates>
+      </LinearRing></outerBoundaryIs></Polygon>
+    </Placemark>
+  </Document>
+</kml>''',
+        overlayPolygon: [
+          GeoCoordinate(latitude: -29.4628, longitude: -51.9672),
+          GeoCoordinate(latitude: -29.4631, longitude: -51.9620),
+          GeoCoordinate(latitude: -29.4670, longitude: -51.9624),
+          GeoCoordinate(latitude: -29.4668, longitude: -51.9675),
+        ],
+        hydrographyPolyline: [
+          GeoCoordinate(latitude: -29.4620, longitude: -51.9680),
+          GeoCoordinate(latitude: -29.4642, longitude: -51.9652),
+          GeoCoordinate(latitude: -29.4678, longitude: -51.9612),
+        ],
+      ),
+    ];
   }
 
   // ===========================================================================
@@ -1028,6 +1348,241 @@ class DatabaseService {
             version: 1,
           ),
         ],
+      ),
+    ];
+  }
+
+  // ===========================================================================
+  // SEED DATA REALISTA: QUALIDADE DA ÁGUA CONAMA 357/2005 (AM-07)
+  // Inclui histórico comparativo por ponto (1ª Campanha Linha de Base vs 2ª Campanha Atual)
+  // com casos de violação CONAMA 357/2005 e de conformidade plena pós-manejo.
+  // ===========================================================================
+  List<WaterQualityAnalysis> _buildSeedWaterAnalyses() {
+    return const [
+      // Ponto PC-MUDA-01 — 1ª Campanha (Linha de Base Pré-Cercamento - COM VIOLAÇÕES CONAMA)
+      WaterQualityAnalysis(
+        id: 'wat-muda-01-c1',
+        projectId: 'proj-muda-01',
+        propertyId: 'prop-muda-01',
+        pointId: 'pt-muda-01',
+        reportCode: 'LAUDO-CONAMA-2026/014',
+        sampleDate: '14/02/2026',
+        campaignName: '1ª Campanha — Linha de Base (Pré-Cercamento APP)',
+        laboratoryName: 'LabHidro Ambiental UNISC (Acreditado ISO/IEC 17025)',
+        ph: 5.6, // Violação (< 6.0)
+        turbidityUnt: 118.4, // Violação (> 100 UNT)
+        dissolvedOxygenMgL: 4.3, // Violação (< 5.0 mg/L)
+        dboMgL: 6.2, // Violação (> 5.0 mg/L)
+        totalPhosphorusMgL: 0.082, // Violação (> 0.050 mg/L)
+        thermotolerantColiformsNmp: 1450, // Violação (> 1000 NMP/100mL)
+        waterTemperatureC: 22.8,
+        flowRateLs: 2.9,
+        technicalConclusion:
+            'Amostra de linha de base coletada após evento chuvoso antes do isolamento da cabeceira. Detectada dessedentação direta de bovinos na nascente, carreamento de sedimentos e aporte orgânico acima do limite Classe 2 CONAMA 357/2005.',
+        isConfidentialReport: true,
+        confidentialLabNotes:
+            'LAUDO RESTRITO (AM-01): Anexado aos autos do Termo de Compromisso Ambiental (Processo nº 88219/2024). Exigido cercamento imediato num raio de 50m da cabeceira.',
+        responsibleAnalyst: 'Quím. Industrial Dr. Roberto M. Friedrich (CRQ-V 052190)',
+        createdAt: '2026-02-16T15:30:00Z',
+      ),
+      // Ponto PC-MUDA-01 — 2ª Campanha (Pós-Cercamento e Plantio - CONFORME CONAMA)
+      WaterQualityAnalysis(
+        id: 'wat-muda-01-c2',
+        projectId: 'proj-muda-01',
+        propertyId: 'prop-muda-01',
+        pointId: 'pt-muda-01',
+        reportCode: 'LAUDO-CONAMA-2026/089',
+        sampleDate: '18/10/2026',
+        campaignName: '2ª Campanha — Monitoramento Pós-Isolamento (8 meses)',
+        laboratoryName: 'LabHidro Ambiental UNISC (Acreditado ISO/IEC 17025)',
+        ph: 6.9,
+        turbidityUnt: 14.2,
+        dissolvedOxygenMgL: 7.4,
+        dboMgL: 2.1,
+        totalPhosphorusMgL: 0.028,
+        thermotolerantColiformsNmp: 240,
+        waterTemperatureC: 19.4,
+        flowRateLs: 3.8,
+        technicalConclusion:
+            'Recuperação hidroambiental expressiva após 8 meses de isolamento físico da APP e adensamento florestal. Todos os 6 parâmetros enquadrados integralmente nos limites da Classe 2 da Resolução CONAMA nº 357/2005, com redução de 88% na turbidez.',
+        isConfidentialReport: false,
+        confidentialLabNotes:
+            'Laudo liberado para comprovação de metas físicas do Programa Muda.',
+        responsibleAnalyst: 'Quím. Industrial Dr. Roberto M. Friedrich (CRQ-V 052190)',
+        createdAt: '2026-10-20T11:10:00Z',
+      ),
+      // Ponto PC-PSA-01 — 1ª Campanha (Linha de Base - Violação pontual de Fósforo e Coliformes)
+      WaterQualityAnalysis(
+        id: 'wat-psa-01-c1',
+        projectId: 'proj-psa-02',
+        propertyId: 'prop-psa-01',
+        pointId: 'pt-psa-01',
+        reportCode: 'LAUDO-CONAMA-2026/031',
+        sampleDate: '20/03/2026',
+        campaignName: '1ª Campanha — Vistoria de Habilitação PSA',
+        laboratoryName: 'Laboratório Central de Águas Univates',
+        ph: 6.4,
+        turbidityUnt: 28.5,
+        dissolvedOxygenMgL: 6.1,
+        dboMgL: 3.8,
+        totalPhosphorusMgL: 0.064, // Violação (> 0.050 mg/L)
+        thermotolerantColiformsNmp: 1120, // Violação (> 1000 NMP/100mL)
+        waterTemperatureC: 20.5,
+        flowRateLs: 4.2,
+        technicalConclusion:
+            'Escoamento superficial de lavoura adjacente causou leve excedente de Fósforo Total (0,064 mg/L) e Coliformes Termotolerantes (1.120 NMP/100mL). Recomendado terraceamento e proteção com caxambu.',
+        isConfidentialReport: false,
+        confidentialLabNotes:
+            'Nota interna: proprietário aderiu ao plano de adequação de saneamento rural ecológico.',
+        responsibleAnalyst: 'Eng. Sanitarista Dra. Patrícia L. Kothe',
+        createdAt: '2026-03-22T10:00:00Z',
+      ),
+      // Ponto PC-PSA-01 — 2ª Campanha (Pós-Caxambu e Barraginhas - CONFORME CONAMA)
+      WaterQualityAnalysis(
+        id: 'wat-psa-01-c2',
+        projectId: 'proj-psa-02',
+        propertyId: 'prop-psa-01',
+        pointId: 'pt-psa-01',
+        reportCode: 'LAUDO-CONAMA-2026/104',
+        sampleDate: '25/10/2026',
+        campaignName: '2ª Campanha — Verificação Semestral PSA (1º Ciclo)',
+        laboratoryName: 'Laboratório Central de Águas Univates',
+        ph: 6.8,
+        turbidityUnt: 1.9,
+        dissolvedOxygenMgL: 8.2,
+        dboMgL: 1.4,
+        totalPhosphorusMgL: 0.019,
+        thermotolerantColiformsNmp: 95,
+        waterTemperatureC: 18.2,
+        flowRateLs: 4.9,
+        technicalConclusion:
+            'Excelência hídrica comprovada no Olho d\'Água Pedra Branca após instalação de caxambu e 18 bacias de contenção a montante. Água cristalina (1,9 UNT) e 100% conforme CONAMA 357/2005 Classe 2.',
+        isConfidentialReport: false,
+        confidentialLabNotes:
+            'Habilitado para liberação integral da parcela semestral de PSA Hídrico.',
+        responsibleAnalyst: 'Eng. Sanitarista Dra. Patrícia L. Kothe',
+        createdAt: '2026-10-26T16:40:00Z',
+      ),
+      // Ponto PC-PSA-03 — Estação Fluviométrica Arroio Castelhano (CONFORME CONAMA)
+      WaterQualityAnalysis(
+        id: 'wat-psa-03-c1',
+        projectId: 'proj-psa-02',
+        propertyId: 'prop-psa-02',
+        pointId: 'pt-psa-03',
+        reportCode: 'LAUDO-CONAMA-2026/112',
+        sampleDate: '28/10/2026',
+        campaignName: '2ª Campanha — Monitoramento Fluviométrico Sub-bacia',
+        laboratoryName: 'Laboratório Central de Águas Univates',
+        ph: 7.1,
+        turbidityUnt: 8.6,
+        dissolvedOxygenMgL: 7.9,
+        dboMgL: 1.8,
+        totalPhosphorusMgL: 0.024,
+        thermotolerantColiformsNmp: 180,
+        waterTemperatureC: 19.0,
+        flowRateLs: 42.5,
+        technicalConclusion:
+            'Trecho ciliar sob manejo de Sistema Agroflorestal apresenta ótima oxigenação (7,9 mg/L), baixa carga orgânica e ganho de 14% na vazão específica de base.',
+        isConfidentialReport: true,
+        confidentialLabNotes:
+            'NOTA SIGILOSA (AM-01): Ponto utilizado como estação de controle para cálculo de bonificação contratual de carbono/água da Cooperativa Água Limpa.',
+        responsibleAnalyst: 'Eng. Sanitarista Dra. Patrícia L. Kothe',
+        createdAt: '2026-10-29T09:15:00Z',
+      ),
+    ];
+  }
+
+  // ===========================================================================
+  // SEED DATA REALISTA: UNIDADES MODELO DE CONSERVAÇÃO DO SOLO (AM-10)
+  // ===========================================================================
+  List<SoilConservationUnit> _buildSeedSoilConservationUnits() {
+    return const [
+      SoilConservationUnit(
+        id: 'soil-unit-01',
+        projectId: 'proj-psa-02',
+        propertyId: 'prop-psa-01',
+        pointId: 'pt-psa-02',
+        code: 'UMCS-TQ-01',
+        name: 'Unidade Demonstrativa de Terraceamento & Barraginhas — Boa Esperança',
+        areaHa: 42.0,
+        soilClass: 'Chernossolo Argilúvico / Neossolo Litólico',
+        slopePercent: 14.5,
+        adoptedPractices: [
+          'Plantio Direto na Palha',
+          'Terraceamento em Nível',
+          'Curvas de Nível e Bacias de Contenção (Barraginhas)',
+          'Adubação Verde e Cobertura Morta',
+        ],
+        vegetalCoverPercent: 92.5,
+        baselineErosionTonHaYear: 18.4,
+        currentErosionTonHaYear: 2.3,
+        erosionAbatementTonHaYear: 16.1,
+        infiltrationBasinsCount: 18,
+        conservationLevel: 'Excelente',
+        lastEvaluationDate: '25/10/2026',
+        technicalNotes:
+            'Unidade modelo de referência na microbacia do Arroio Castelhano. As 18 bacias de contenção pluvial retêm 100% do deflúvio das estradas vicinais, abatendo 16,1 t/ha/ano de sedimentos (redução de 87,5% pela Equação Universal de Perda de Solo - USLE).',
+        confidentialOwnerAgreement:
+            'ACORDO SIGILOSO (AM-01): Termo de Cessão de Área Demonstrativa nº 09/2026 — Produtor João Batista Silveira (CPF 295.774.110-04) recebe adicional de R\$ 480,00/mês para dias de campo técnicos.',
+        responsibleTechnician: 'Eng. Lucas Albuquerque',
+      ),
+      SoilConservationUnit(
+        id: 'soil-unit-02',
+        projectId: 'proj-psa-02',
+        propertyId: 'prop-psa-02',
+        pointId: 'pt-psa-03',
+        code: 'UMCS-TQ-02',
+        name: 'Unidade Modelo SAF Sucessional & Cobertura Permanente — Água Limpa',
+        areaHa: 56.0,
+        soilClass: 'Latossolo Vermelho Distrófico',
+        slopePercent: 9.0,
+        adoptedPractices: [
+          'Sistema Agroflorestal (SAF) Sucessional',
+          'Adubação Verde e Cobertura Morta',
+          'Cercamento Integral de APP',
+          'Plantio Direto na Palha',
+        ],
+        vegetalCoverPercent: 96.0,
+        baselineErosionTonHaYear: 14.2,
+        currentErosionTonHaYear: 1.1,
+        erosionAbatementTonHaYear: 13.1,
+        infiltrationBasinsCount: 12,
+        conservationLevel: 'Excelente',
+        lastEvaluationDate: '28/10/2026',
+        technicalNotes:
+            'Consórcio agroflorestal em linhas de nível com aporte contínuo de serapilheira (96% de cobertura do solo). Infiltração de água no perfil aumentou de 35 mm/h para 118 mm/h.',
+        confidentialOwnerAgreement:
+            'ACORDO SIGILOSO (AM-01): Cláudio Renato Bruxel (CAR RS-4311403-1B90F332A88C4E179D04) — Bonificação máxima de URE (fator 1.25x) auditada pela Coordenação.',
+        responsibleTechnician: 'Eng. Lucas Albuquerque',
+      ),
+      SoilConservationUnit(
+        id: 'soil-unit-03',
+        projectId: 'proj-muda-01',
+        propertyId: 'prop-muda-01',
+        pointId: 'pt-muda-01',
+        code: 'UMCS-RP-01',
+        name: 'Unidade Modelo de Contenção de Cabeceira & Cercamento APP — Santa Inês',
+        areaHa: 34.5,
+        soilClass: 'Argissolo Vermelho-Amarelo Eutrófico',
+        slopePercent: 18.0,
+        adoptedPractices: [
+          'Cercamento Integral de APP',
+          'Curvas de Nível e Bacias de Contenção (Barraginhas)',
+          'Adubação Verde e Cobertura Morta',
+          'Adequação Ambiental de Estradas Vicinais',
+        ],
+        vegetalCoverPercent: 84.0,
+        baselineErosionTonHaYear: 22.8,
+        currentErosionTonHaYear: 4.5,
+        erosionAbatementTonHaYear: 18.3,
+        infiltrationBasinsCount: 15,
+        conservationLevel: 'Adequado',
+        lastEvaluationDate: '18/10/2026',
+        technicalNotes:
+            'Estabilização de talude de cabeceira com paliçadas de bambu, semeadura de aveia-preta/nabo-forrageiro nas entrelinhas das mudas nativas e 15 camalhões de retenção.',
+        confidentialOwnerAgreement:
+            'ACORDO SIGILOSO (AM-01): Vinculado ao cumprimento da condicionante 4.2 do TCA Judicial nº 88219/2024 (Antônio Carlos Dorneles).',
+        responsibleTechnician: 'Eng. Lucas Albuquerque',
       ),
     ];
   }

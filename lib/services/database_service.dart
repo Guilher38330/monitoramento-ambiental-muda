@@ -1,10 +1,11 @@
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
+import '../models/field_form_record.dart';
 import '../models/project_models.dart';
 import '../models/user_profile.dart';
 
-/// Serviço de persistência SQLite local (Premissas Comuns + AM-01 + AM-02).
-/// Contém o Seed Data inicial realista dos Projetos Muda e PSA para funcionamento 100% offline.
+/// Serviço de persistência SQLite local (Premissas Comuns + AM-01 a AM-05, AM-11, AM-12).
+/// Contém o Seed Data inicial realista dos Projetos Muda e PSA e da Fila de Coleta Offline.
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._internal();
   DatabaseService._internal();
@@ -26,19 +27,73 @@ class DatabaseService {
     }
     _database = await openDatabase(
       customPath,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
   Future<Database> _initDatabase() async {
     final dbRoot = await getDatabasesPath();
-    final dbPath = p.join(dbRoot, 'muda_psa_monitoring_v1.db');
+    final dbPath = p.join(dbRoot, 'muda_psa_monitoring_v2.db');
     return openDatabase(
       dbPath,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _createFieldFormsTable(db);
+      final existing = await db.query('field_forms_local', limit: 1);
+      if (existing.isEmpty) {
+        for (final record in _buildSeedFieldForms()) {
+          await db.insert(
+            'field_forms_local',
+            record.toDbMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _createFieldFormsTable(Database db) async {
+    // 6. Tabela local de formulários de campo e fila de sincronização idempotente por client_uuid (AM-03, AM-04, AM-05, AM-11, AM-12)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS field_forms_local (
+        client_uuid TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        property_id TEXT NOT NULL,
+        point_id TEXT NOT NULL,
+        template_name TEXT NOT NULL,
+        vegetation_stage TEXT NOT NULL,
+        survival_rate_percent REAL NOT NULL,
+        erosion_status TEXT NOT NULL,
+        invasive_species_present INTEGER NOT NULL,
+        maintenance_performed TEXT NOT NULL,
+        technical_notes TEXT NOT NULL,
+        is_confidential INTEGER NOT NULL,
+        latitude REAL NOT NULL,
+        longitude REAL NOT NULL,
+        gps_accuracy_meters REAL NOT NULL,
+        photo_local_path TEXT NOT NULL,
+        photo_captured_at TEXT NOT NULL,
+        photo_caption TEXT NOT NULL,
+        sync_status TEXT NOT NULL,
+        sync_error_message TEXT,
+        version INTEGER NOT NULL,
+        author_id TEXT NOT NULL,
+        author_name TEXT NOT NULL,
+        author_role TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        synced_at TEXT,
+        conflict_server_json TEXT,
+        audit_history_json TEXT NOT NULL
+      )
+    ''');
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -131,6 +186,9 @@ class DatabaseService {
       )
     ''');
 
+    // 6. Tabela local de formulários de campo e fila de sincronização (Fase 2)
+    await _createFieldFormsTable(db);
+
     await _seedInitialData(db);
   }
 
@@ -163,6 +221,15 @@ class DatabaseService {
     // Seed de Pontos de Coleta (AM-02 / AM-05)
     for (final point in _buildSeedCollectionPoints()) {
       await db.insert('collection_points', point.toDbMap());
+    }
+
+    // Seed de Formulários de Campo e Fila de Sincronização (AM-03, AM-04, AM-05, AM-11)
+    for (final form in _buildSeedFieldForms()) {
+      await db.insert(
+        'field_forms_local',
+        form.toDbMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
     }
   }
 
@@ -291,6 +358,60 @@ class DatabaseService {
       orderBy: 'code ASC',
     );
     return rows.map(CollectionPoint.fromDbMap).toList();
+  }
+
+  /// Lista todos os formulários de campo armazenados localmente no SQLite (AM-04, AM-11).
+  Future<List<FieldFormRecord>> getFieldForms({
+    String? projectId,
+    String? pointId,
+  }) async {
+    final db = await database;
+    String? whereClause;
+    List<Object?>? whereArgs;
+
+    if (projectId != null && pointId != null) {
+      whereClause = 'project_id = ? AND point_id = ?';
+      whereArgs = [projectId, pointId];
+    } else if (projectId != null) {
+      whereClause = 'project_id = ?';
+      whereArgs = [projectId];
+    } else if (pointId != null) {
+      whereClause = 'point_id = ?';
+      whereArgs = [pointId];
+    }
+
+    final rows = await db.query(
+      'field_forms_local',
+      where: whereClause,
+      whereArgs: whereArgs,
+      orderBy: 'created_at DESC',
+    );
+    return rows.map(FieldFormRecord.fromDbMap).toList();
+  }
+
+  /// Busca um registro específico pela chave de idempotência `clientUuid`.
+  Future<FieldFormRecord?> getFieldFormByUuid(String clientUuid) async {
+    final db = await database;
+    final rows = await db.query(
+      'field_forms_local',
+      where: 'client_uuid = ?',
+      whereArgs: [clientUuid],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return FieldFormRecord.fromDbMap(rows.first);
+  }
+
+  /// Insere ou atualiza de forma idempotente pelo `client_uuid` (PRIMARY KEY),
+  /// garantindo que reenvios ou sincronizações repetidas nunca dupliquem o registro
+  /// (1º Critério de Aceite + AM-04).
+  Future<void> upsertFieldForm(FieldFormRecord record) async {
+    final db = await database;
+    await db.insert(
+      'field_forms_local',
+      record.toDbMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   // ===========================================================================
@@ -729,4 +850,186 @@ class DatabaseService {
       ),
     ];
   }
+
+  // ===========================================================================
+  // SEED DATA REALISTA: FORMULÁRIOS DE CAMPO E FILA OFFLINE (FASE 2)
+  // Inclui: 1 Sincronizado com trilha de auditoria, 1 Pendente Offline e 1 em Conflito
+  // ===========================================================================
+  List<FieldFormRecord> _buildSeedFieldForms() {
+    return const [
+      FieldFormRecord(
+        clientUuid: 'uuid-seed-synced-001',
+        projectId: 'proj-muda-01',
+        propertyId: 'prop-muda-01',
+        pointId: 'pt-muda-02',
+        templateName: 'Vistoria de Sobrevivência de Mudas (Muda)',
+        vegetationStage:
+            'Estágio Intermediário — Fechamento de Entrelinhas (1 a 3 anos)',
+        survivalRatePercent: 91.4,
+        erosionStatus: 'Ausente — Solo Estabilizado com Cobertura Vegetal',
+        invasiveSpeciesPresent: false,
+        maintenancePerformed:
+            'Coroamento Manual + Controle de Formigas Cortadeiras',
+        technicalNotes:
+            'Pegamento excelente de Inga vera e Cedrela fissilis na parcela #04. Nota sigilosa: verificado marco divisório do TCA judicial sem invasão de gado.',
+        isConfidential: true,
+        latitude: -29.7158,
+        longitude: -52.4264,
+        gpsAccuracyMeters: 3.4,
+        photoLocalPath: 'demo://foto_campo_pc_muda_02_parcela04.jpg',
+        photoCapturedAt: '2026-10-20T09:40:00Z',
+        photoCaption:
+            'Vista panorâmica da Parcela Permanente #04 — Coordenadas -29.7158, -52.4264 (±3,4m)',
+        syncStatus: SyncStatus.synced,
+        version: 2,
+        authorId: 'usr-tec-01',
+        authorName: 'Eng. Lucas Albuquerque',
+        authorRole: 'Equipe Técnica',
+        createdAt: '2026-10-20T09:42:15Z',
+        syncedAt: '2026-10-20T18:15:04Z',
+        auditHistory: [
+          AuditLogEntry(
+            id: 'aud-seed-1a',
+            action: 'CRIACAO_OFFLINE',
+            summary:
+                'Formulário registrado em campo sem internet com GPS (±3,4m) e foto georreferenciada.',
+            authorId: 'usr-tec-01',
+            authorName: 'Eng. Lucas Albuquerque',
+            authorRole: 'Equipe Técnica',
+            timestamp: '2026-10-20T09:42:15Z',
+            version: 1,
+          ),
+          AuditLogEntry(
+            id: 'aud-seed-1b',
+            action: 'SINCRONIZADO_SERVIDOR',
+            summary:
+                'Sincronizado de forma idempotente (UUID uuid-seed-synced-001) com a plataforma Muda/PSA.',
+            authorId: 'usr-tec-01',
+            authorName: 'Eng. Lucas Albuquerque',
+            authorRole: 'Equipe Técnica',
+            timestamp: '2026-10-20T18:15:04Z',
+            version: 2,
+            syncedAt: '2026-10-20T18:15:04Z',
+          ),
+        ],
+      ),
+      FieldFormRecord(
+        clientUuid: 'uuid-seed-pending-002',
+        projectId: 'proj-psa-02',
+        propertyId: 'prop-psa-01',
+        pointId: 'pt-psa-01',
+        templateName: 'Monitoramento de APP e Nascente (PSA)',
+        vegetationStage:
+            'Estágio Avançado — Formação de Dossel e Regeneração Natural',
+        survivalRatePercent: 94.0,
+        erosionStatus: 'Ausente — Solo Estabilizado com Cobertura Vegetal',
+        invasiveSpeciesPresent: false,
+        maintenancePerformed:
+            'Desassoreamento de Bacia de Contenção / Olho d\'Água (PSA)',
+        technicalNotes:
+            'Olho d\'Água Pedra Branca com proteção de caxambu íntegra, água cristalina (turbidez 1,9 NTU) e vazão contínua para cálculo de URE/PSA.',
+        isConfidential: false,
+        latitude: -29.6049,
+        longitude: -52.1941,
+        gpsAccuracyMeters: 4.1,
+        photoLocalPath: 'demo://foto_campo_pc_psa_01_caxambu.jpg',
+        photoCapturedAt: '2026-10-25T14:20:00Z',
+        photoCaption:
+            'Inspeção da Nascente Pedra Branca — Coordenadas -29.6049, -52.1941 (±4,1m)',
+        syncStatus: SyncStatus.pending,
+        version: 1,
+        authorId: 'usr-tec-01',
+        authorName: 'Eng. Lucas Albuquerque',
+        authorRole: 'Equipe Técnica',
+        createdAt: '2026-10-25T14:22:30Z',
+        auditHistory: [
+          AuditLogEntry(
+            id: 'aud-seed-2a',
+            action: 'CRIACAO_OFFLINE',
+            summary:
+                'Coleta realizada em modo offline na microbacia Arroio Castelhano. Aguardando conexão na fila SQLite.',
+            authorId: 'usr-tec-01',
+            authorName: 'Eng. Lucas Albuquerque',
+            authorRole: 'Equipe Técnica',
+            timestamp: '2026-10-25T14:22:30Z',
+            version: 1,
+          ),
+        ],
+      ),
+      FieldFormRecord(
+        clientUuid: 'uuid-seed-conflict-003',
+        projectId: 'proj-muda-01',
+        propertyId: 'prop-muda-02',
+        pointId: 'pt-muda-03',
+        templateName: 'Inspeção de Erosão e Cercamento',
+        vegetationStage:
+            'Estágio Inicial — Pegamento de Mudas (0 a 12 meses)',
+        survivalRatePercent: 79.5,
+        erosionStatus: 'Laminar Leve — Sem Sulcos Ativos',
+        invasiveSpeciesPresent: true,
+        maintenancePerformed:
+            'Roçada Seletiva de Gramíneas Exóticas + Adubação de Cobertura',
+        technicalNotes:
+            'Vistoria de campo identificou reinfestação focal de braquiária na borda leste e necessidade de replantio de 120 mudas no talhão de encosta.',
+        isConfidential: false,
+        latitude: -29.5408,
+        longitude: -52.5188,
+        gpsAccuracyMeters: 2.9,
+        photoLocalPath: 'demo://foto_campo_pc_muda_03_encosta.jpg',
+        photoCapturedAt: '2026-10-26T10:55:00Z',
+        photoCaption:
+            'Parcela de Regeneração #02 Sinimbu — Coordenadas -29.5408, -52.5188 (±2,9m)',
+        syncStatus: SyncStatus.conflict,
+        syncErrorMessage:
+            'Conflito de versão detectado (HTTP 409): a plataforma central possui revisão concorrente v2 registrada pela Coordenação.',
+        version: 1,
+        authorId: 'usr-tec-01',
+        authorName: 'Eng. Lucas Albuquerque',
+        authorRole: 'Equipe Técnica',
+        createdAt: '2026-10-26T11:00:00Z',
+        conflictServerData: ConflictServerPayload(
+          serverVersion: 2,
+          serverAuthorName: 'Dra. Helena Vasconcelos',
+          serverAuthorRole: 'Administrador',
+          serverUpdatedAt: '2026-10-26T11:30:00Z',
+          vegetationStage:
+              'Área sob Replantio / Adensamento Emergencial',
+          survivalRatePercent: 84.0,
+          erosionStatus: 'Sulcos Erosivos Moderados — Requer Contenção',
+          invasiveSpeciesPresent: true,
+          maintenancePerformed:
+              'Manutenção de Cercamento de APP + Limpeza de Aceiro',
+          technicalNotes:
+              'Revisão via aerofotogrametria/plataforma: classificado como área sob replantio prioritário com taxa estimada de 84,0% após reposição parcial.',
+          divergenceReason:
+              'Registro editado simultaneamente no painel web administrativo enquanto a equipe técnica operava offline em campo.',
+        ),
+        auditHistory: [
+          AuditLogEntry(
+            id: 'aud-seed-3a',
+            action: 'CRIACAO_OFFLINE',
+            summary:
+                'Coleta em campo registrada sem conectividade no Sítio Vale das Araucárias.',
+            authorId: 'usr-tec-01',
+            authorName: 'Eng. Lucas Albuquerque',
+            authorRole: 'Equipe Técnica',
+            timestamp: '2026-10-26T11:00:00Z',
+            version: 1,
+          ),
+          AuditLogEntry(
+            id: 'aud-seed-3b',
+            action: 'CONFLITO_DETECTADO',
+            summary:
+                'Tentativa de sincronização detectou divergência (v1 local vs v2 servidor — Dra. Helena Vasconcelos). Aguardando decisão técnica (AM-04).',
+            authorId: 'usr-tec-01',
+            authorName: 'Eng. Lucas Albuquerque',
+            authorRole: 'Equipe Técnica',
+            timestamp: '2026-10-26T17:05:12Z',
+            version: 1,
+          ),
+        ],
+      ),
+    ];
+  }
 }
+

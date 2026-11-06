@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/user_profile.dart';
 import '../state/app_state.dart';
+import 'field_forms_sync_screen.dart';
 import 'projects_screen.dart';
 
 /// Shell principal pós-autenticação:
 /// - AppBar com perfil ativo (ADMIN / TÉCNICO / EMPRESA), troca rápida de perfil e inspetor de Token JWT
-/// - Barra Superior de Modo Demonstração (Online/Offline, Simular Falha de Rede AM-12, Simular Conflito AM-04)
-/// - NavigationBar inferior com as 5 seções do sistema (Aba 1 "Projetos & Áreas" 100% funcional na Fase 1)
+/// - Barra Superior de Modo Demonstração (Online/Offline, Simular Falha de Rede AM-12, Simular Conflito AM-04, Fila Pendente + Sync Rápido)
+/// - NavigationBar inferior com as 5 seções do sistema (Abas de Projetos, Coleta Campo e Sincronização ativas nas Fases 1 e 2)
 class HomeShellScreen extends StatefulWidget {
   final AppState appState;
 
@@ -185,7 +186,7 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
           NavigationDestination(
             icon: Icon(Icons.sync_outlined),
             selectedIcon: Icon(Icons.sync_rounded),
-            label: 'Sincronização',
+            label: 'Coleta & Sync',
           ),
           NavigationDestination(
             icon: Icon(Icons.map_outlined),
@@ -202,11 +203,12 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
     );
   }
 
-  /// Barra de Modo Demonstração (Online/Offline, Falha de Rede AM-12, Conflito AM-04)
+  /// Barra de Modo Demonstração (Online/Offline, Falha de Rede AM-12, Conflito AM-04 + Fila e Sync Rápido)
   Widget _buildDemoModeTopBar(BuildContext context) {
     final isOnline = widget.appState.isOnline;
     final simFail = widget.appState.simulateNetworkFailure;
     final simConflict = widget.appState.simulateConflictOnNextSync;
+    final pendingCount = widget.appState.pendingSyncCount;
 
     return Container(
       width: double.infinity,
@@ -246,6 +248,22 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
               activeColor: const Color(0xFF2E7D32),
               inactiveColor: const Color(0xFFD84315),
               onTap: () => widget.appState.toggleOnlineStatus(),
+            ),
+            const SizedBox(width: 8),
+            // Badge ao vivo da Fila Local + Ação rápida de Sincronização (AM-04)
+            _buildDemoToggleChip(
+              chipKey: const Key('demo_quick_sync_badge'),
+              icon: Icons.sync_rounded,
+              label: 'Fila Offline: $pendingCount • Sync',
+              active: pendingCount > 0,
+              activeColor: const Color(0xFF0277BD),
+              inactiveColor: const Color(0xFF37474F),
+              onTap: () {
+                setState(() {
+                  _selectedTabIndex = 2;
+                });
+                widget.appState.synchronizePendingForms();
+              },
             ),
             const SizedBox(width: 8),
             // Toggle Simular Falha de Rede (AM-12)
@@ -323,25 +341,16 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
       case 0:
         return ProjectsScreen(appState: widget.appState);
       case 1:
-        return _buildUpcomingPhasePreview(
-          icon: Icons.add_location_alt_rounded,
-          phaseBadge: 'ESTRUTURA PRONTA PARA A FASE 2',
-          title: 'Coleta em Campo Offline, GPS, Fotos e Checklists (AM-03, AM-05, AM-07, AM-08)',
-          description:
-              'Esta aba receberá na Fase 2 o formulário de registro de campo com captura GPS em tempo real, validação de consistência hidrológica/florestal, anexo de fotos com metadados e checklists técnicos por tipo de atividade.',
-          currentRoleNote: user.canRegisterFieldData
-              ? 'Seu perfil atual (${user.role.label}) possui permissão de escrita em campo habilitada.'
-              : 'Atenção (AM-01): O perfil ${user.role.label} possui acesso somente leitura e não poderá gravar coletas.',
+        return FieldFormsSyncScreen(
+          key: const ValueKey('tab_field_form_new'),
+          appState: widget.appState,
+          initialSectionIndex: 1,
         );
       case 2:
-        return _buildUpcomingPhasePreview(
-          icon: Icons.sync_rounded,
-          phaseBadge: 'ESTRUTURA PRONTA PARA A FASE 2',
-          title: 'Fila Offline-First, Resolução de Conflitos e Auditoria (AM-04, AM-09, AM-12)',
-          description:
-              'Esta aba exibirá na Fase 2 a fila de sincronização SQLite (Pendente, Sincronizado, Conflito, Erro de Rede), o comparador lado a lado para resolução de conflitos de versão e a trilha de auditoria completa por usuário/data.',
-          currentRoleNote:
-              'Use os botões da Barra de Modo Demonstração no topo para testar estados Online/Offline, Falha de Rede e Conflitos.',
+        return FieldFormsSyncScreen(
+          key: const ValueKey('tab_field_sync_queue'),
+          appState: widget.appState,
+          initialSectionIndex: 0,
         );
       case 3:
         return _buildUpcomingPhasePreview(

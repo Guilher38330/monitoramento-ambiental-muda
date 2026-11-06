@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import '../models/user_profile.dart';
 import '../state/app_state.dart';
 import 'field_forms_sync_screen.dart';
+import 'interactive_map_screen.dart';
 import 'projects_screen.dart';
+import 'water_soil_analysis_screen.dart';
 
 /// Shell principal pós-autenticação:
 /// - AppBar com perfil ativo (ADMIN / TÉCNICO / EMPRESA), troca rápida de perfil e inspetor de Token JWT
 /// - Barra Superior de Modo Demonstração (Online/Offline, Simular Falha de Rede AM-12, Simular Conflito AM-04, Fila Pendente + Sync Rápido)
-/// - NavigationBar inferior com as 5 seções do sistema (Abas de Projetos, Coleta Campo e Sincronização ativas nas Fases 1 e 2)
+/// - NavigationBar inferior com as 5 seções do sistema (Fases 1, 2 e 3 ativas)
 class HomeShellScreen extends StatefulWidget {
   final AppState appState;
 
@@ -22,6 +24,7 @@ class HomeShellScreen extends StatefulWidget {
 
 class _HomeShellScreenState extends State<HomeShellScreen> {
   int _selectedTabIndex = 0;
+  String? _focusedWaterPointId;
 
   @override
   Widget build(BuildContext context) {
@@ -353,139 +356,24 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
           initialSectionIndex: 0,
         );
       case 3:
-        return _buildUpcomingPhasePreview(
-          icon: Icons.map_rounded,
-          phaseBadge: 'ESTRUTURA PRONTA PARA A FASE 3',
-          title: 'Mapa Interativo de Pontos/Áreas e Histórico Comparativo (AM-06, AM-10)',
-          description:
-              'Os ${widget.appState.properties.length} polígonos de propriedades rurais e ${widget.appState.collectionPoints.length} pontos de coleta já estão georreferenciados no banco SQLite e serão plotados no mapa interativo com comparador entre visitas na Fase 3.',
-          currentRoleNote:
-              'Você já pode consultar as coordenadas e propriedades na aba "Projetos & Áreas".',
+        return InteractiveMapScreen(
+          key: const ValueKey('tab_interactive_map'),
+          appState: widget.appState,
+          onOpenWaterAnalysisForPoint: (pointId) {
+            setState(() {
+              _focusedWaterPointId = pointId;
+              _selectedTabIndex = 4;
+            });
+          },
         );
       case 4:
       default:
-        return _buildUpcomingPhasePreview(
-          icon: Icons.insights_rounded,
-          phaseBadge: 'ESTRUTURA PRONTA PARA A FASE 4',
-          title: 'Painel de Indicadores Ambientais e Exportação PDF/CSV (AM-11)',
-          description:
-              'Esta aba apresentará gráficos de evolução da recomposição florestal, qualidade da água (turbidez/vazão), execução física-financeira e geração nativa de Relatório Técnico em PDF e planilha CSV.',
-          currentRoleNote:
-              'Relatórios respeitarão automaticamente o filtro de sigilo do perfil ${user.role.label}.',
+        return WaterSoilAnalysisScreen(
+          key: ValueKey('tab_water_soil_${_focusedWaterPointId ?? "all"}'),
+          appState: widget.appState,
+          initialPointId: _focusedWaterPointId,
         );
     }
-  }
-
-  Widget _buildUpcomingPhasePreview({
-    required IconData icon,
-    required String phaseBadge,
-    required String title,
-    required String description,
-    required String currentRoleNote,
-  }) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 500),
-          child: Card(
-            elevation: 0,
-            color: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: const BorderSide(color: Color(0xFFD5E2D9)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F5E9),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Icon(
-                      icon,
-                      size: 40,
-                      color: const Color(0xFF1B5E20),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1B5E20),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      phaseBadge,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 16.5,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF16301D),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    description,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF496050),
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3F8F5),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFD5E2D9)),
-                    ),
-                    child: Text(
-                      currentRoleNote,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1B5E20),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _selectedTabIndex = 0;
-                      });
-                    },
-                    icon: const Icon(Icons.folder_special_rounded, size: 18),
-                    label: const Text('Voltar para Projetos & Áreas (Fase 1)'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   void _showJwtInspectorDialog(BuildContext context) {

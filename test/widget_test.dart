@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:trabalho_final/main.dart';
 import 'package:trabalho_final/models/user_profile.dart';
+import 'package:trabalho_final/models/water_soil_models.dart';
 import 'package:trabalho_final/services/database_service.dart';
 import 'package:trabalho_final/state/app_state.dart';
 
@@ -491,6 +492,229 @@ void main() {
       await tester.tap(find.text('Coleta Campo'));
       await tester.pumpAndSettle();
       expect(find.textContaining('Acesso Somente Leitura — Perfil Empresa Contratante (AM-01)'), findsOneWidget);
+    });
+  });
+
+  group('Fase 3 — Mapa Interativo (AM-06), Água CONAMA 357/2005 (AM-07) e Conservação do Solo (AM-10)', () {
+    late DatabaseService dbService;
+    late AppState appState;
+
+    Future<void> initPhase3State() async {
+      dbService = DatabaseService.instance;
+      await dbService.initializeForTest(inMemoryDatabasePath);
+      appState = AppState(dbService: dbService);
+      await appState.initialize();
+    }
+
+    test('Avalia limites CONAMA 357/2005 Classe 2 (AM-07), Unidades Modelo de Solo (AM-10), Camadas KML (AM-06) e bloqueio RBAC', () async {
+      await initPhase3State();
+      await appState.quickLoginAsRole(UserRole.tecnico);
+
+      // 0. Testa valores de fronteira exatos dos limites CONAMA 357/2005 Classe 2 (casos de borda)
+      expect(Conama357Limits.isPhCompliant(6.0), isTrue);
+      expect(Conama357Limits.isPhCompliant(9.0), isTrue);
+      expect(Conama357Limits.isPhCompliant(5.99), isFalse);
+      expect(Conama357Limits.isPhCompliant(9.01), isFalse);
+      expect(Conama357Limits.isTurbidityCompliant(100.0), isTrue);
+      expect(Conama357Limits.isTurbidityCompliant(100.1), isFalse);
+      expect(Conama357Limits.isOdCompliant(5.0), isTrue);
+      expect(Conama357Limits.isOdCompliant(4.99), isFalse);
+      expect(Conama357Limits.isDboCompliant(5.0), isTrue);
+      expect(Conama357Limits.isDboCompliant(5.01), isFalse);
+      expect(Conama357Limits.isPhosphorusCompliant(0.050), isTrue);
+      expect(Conama357Limits.isPhosphorusCompliant(0.051), isFalse);
+      expect(Conama357Limits.isColiformsCompliant(1000), isTrue);
+      expect(Conama357Limits.isColiformsCompliant(1001), isFalse);
+
+      // 1. Verifica carregamento do seed da Fase 3 (5 laudos de água, 3 unidades de solo e 4 camadas KML)
+      expect(appState.waterAnalyses.length, equals(5));
+      expect(appState.soilUnits.length, equals(3));
+      expect(appState.kmlOverlays.length, equals(4));
+
+      // 2. Verifica detecção automática de violação CONAMA 357/2005 na 1ª campanha de PC-MUDA-01 vs conformidade na 2ª campanha
+      final ptMudaAnalyses = appState.getWaterAnalysesForPoint('pt-muda-01');
+      expect(ptMudaAnalyses.length, equals(2));
+
+      final campaign1 = ptMudaAnalyses.firstWhere((a) => a.id == 'wat-muda-01-c1');
+      final campaign2 = ptMudaAnalyses.firstWhere((a) => a.id == 'wat-muda-01-c2');
+
+      expect(campaign1.isConamaCompliant, isFalse);
+      expect(campaign1.violations.length, equals(6)); // Todos os 6 parâmetros violados na linha de base
+      expect(campaign2.isConamaCompliant, isTrue);
+      expect(campaign2.violations, isEmpty);
+
+      // 3. Registra novo laudo de água com violação de Turbidez e Fósforo (AM-07)
+      final createdWater = await appState.saveWaterQualityAnalysis(
+        projectId: 'proj-muda-01',
+        propertyId: 'prop-muda-01',
+        pointId: 'pt-muda-01',
+        reportCode: 'LAUDO-TEST-CONAMA-999',
+        sampleDate: '06/11/2026',
+        campaignName: 'Campanha Extra Pós-Chuva Torrencial',
+        laboratoryName: 'LabHidro UNISC',
+        ph: 6.5,
+        turbidityUnt: 135.0, // > 100 UNT (violação)
+        dissolvedOxygenMgL: 6.8,
+        dboMgL: 3.2,
+        totalPhosphorusMgL: 0.075, // > 0.050 mg/L (violação)
+        thermotolerantColiformsNmp: 420,
+        waterTemperatureC: 20.1,
+        flowRateLs: 5.4,
+        technicalConclusion: 'Pico transitório de turbidez pós-precipitação intensa.',
+        isConfidentialReport: true,
+        confidentialLabNotes: 'Nota sigilosa de auditoria hidroambiental.',
+      );
+
+      expect(createdWater, isNotNull);
+      expect(createdWater!.isConamaCompliant, isFalse);
+      expect(createdWater.violations.length, equals(2));
+      expect(appState.waterAnalyses.length, equals(6));
+
+      // 4. Registra nova Unidade Modelo de Conservação do Solo (AM-10) e valida cálculo de abatimento USLE
+      final createdSoil = await appState.saveSoilConservationUnit(
+        projectId: 'proj-psa-02',
+        propertyId: 'prop-psa-01',
+        pointId: 'pt-psa-02',
+        code: 'UMCS-TEST-04',
+        name: 'Unidade Demonstrativa Terraços Base Larga',
+        areaHa: 30.0,
+        soilClass: 'Argissolo Vermelho',
+        slopePercent: 11.5,
+        adoptedPractices: const [
+          'Plantio Direto na Palha',
+          'Terraceamento em Nível',
+        ],
+        vegetalCoverPercent: 91.0,
+        baselineErosionTonHaYear: 20.0,
+        currentErosionTonHaYear: 3.0,
+        infiltrationBasinsCount: 14,
+        conservationLevel: 'Excelente',
+        lastEvaluationDate: '06/11/2026',
+        technicalNotes: 'Abatimento expressivo de sedimentos.',
+        confidentialOwnerAgreement: 'Termo restrito LGPD.',
+      );
+
+      expect(createdSoil, isNotNull);
+      expect(createdSoil!.erosionAbatementTonHaYear, closeTo(17.0, 0.01));
+      expect(createdSoil.erosionReductionPercent, closeTo(85.0, 0.1));
+      expect(appState.soilUnits.length, equals(4));
+
+      // 5. Verifica bloqueio RBAC para perfil Empresa Contratante (AM-01)
+      await appState.quickLoginAsRole(UserRole.empresa);
+      final blockedWater = await appState.saveWaterQualityAnalysis(
+        projectId: 'proj-muda-01',
+        propertyId: 'prop-muda-01',
+        pointId: 'pt-muda-01',
+        reportCode: 'LAUDO-BLOCKED',
+        sampleDate: '06/11/2026',
+        campaignName: 'Bloqueado',
+        laboratoryName: 'Lab',
+        ph: 7.0,
+        turbidityUnt: 10.0,
+        dissolvedOxygenMgL: 7.0,
+        dboMgL: 2.0,
+        totalPhosphorusMgL: 0.02,
+        thermotolerantColiformsNmp: 100,
+        waterTemperatureC: 20.0,
+        flowRateLs: 3.0,
+        technicalConclusion: 'x',
+        isConfidentialReport: false,
+        confidentialLabNotes: 'x',
+      );
+      expect(blockedWater, isNull);
+
+      final blockedSoil = await appState.saveSoilConservationUnit(
+        projectId: 'proj-psa-02',
+        propertyId: 'prop-psa-01',
+        pointId: 'pt-psa-02',
+        code: 'UMCS-BLOCKED',
+        name: 'Bloqueado',
+        areaHa: 10.0,
+        soilClass: 'Solo',
+        slopePercent: 5.0,
+        adoptedPractices: const ['Plantio Direto na Palha'],
+        vegetalCoverPercent: 80.0,
+        baselineErosionTonHaYear: 10.0,
+        currentErosionTonHaYear: 2.0,
+        infiltrationBasinsCount: 4,
+        conservationLevel: 'Adequado',
+        lastEvaluationDate: '06/11/2026',
+        technicalNotes: 'x',
+        confidentialOwnerAgreement: 'x',
+      );
+      expect(blockedSoil, isNull);
+    });
+
+    testWidgets('Fluxo UI Fase 3: Mapa Interativo + Croqui KML (AM-06), Água CONAMA 357/2005 (AM-07) e Conservação do Solo (AM-10)', (WidgetTester tester) async {
+      await tester.runAsync(() async {
+        await initPhase3State();
+      });
+
+      tester.view.physicalSize = const Size(1080, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.runAsync(() => appState.quickLoginAsRole(UserRole.tecnico));
+      await tester.pumpWidget(MudaPsaApp(appState: appState));
+      await tester.pumpAndSettle();
+
+      // 1. Navega para a aba "Mapa & Histórico" (index 3 - AM-06)
+      await tester.tap(find.text('Mapa & Histórico'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('interactive_flutter_map_container')), findsOneWidget);
+      expect(find.byKey(const Key('selected_point_inspector_pt-muda-01')), findsOneWidget);
+
+      // Abre o modal de Croqui Técnico & Camada KML Processada (AM-06)
+      await tester.tap(find.byKey(const Key('open_kml_croqui_inspector_button')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('kml_croqui_inspector_dialog')), findsOneWidget);
+      expect(find.byKey(const Key('technical_croqui_schematic_canvas')), findsOneWidget);
+      expect(find.textContaining('MUDA_RP01_Fazenda_Santa_Ines_Croqui_APP.kml'), findsWidgets);
+
+      await tester.tap(find.byKey(const Key('close_kml_croqui_dialog_btn')));
+      await tester.pumpAndSettle();
+
+      // Seleciona outro ponto de coleta no seletor rápido do mapa (PC-PSA-01)
+      final psaPointChip = find.byKey(const Key('select_point_chip_pt-psa-01'));
+      await tester.ensureVisible(psaPointChip);
+      await tester.tap(psaPointChip);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('selected_point_inspector_pt-psa-01')), findsOneWidget);
+
+      // Usa o botão de atalho do mapa para abrir diretamente os Laudos CONAMA & Solo daquele ponto (AM-07)
+      final jumpBtn = find.byKey(const Key('jump_to_water_soil_from_map_btn'));
+      await tester.ensureVisible(jumpBtn);
+      await tester.tap(jumpBtn);
+      await tester.pumpAndSettle();
+
+      // 2. Verifica tela de Qualidade da Água CONAMA 357/2005 (AM-07)
+      expect(find.textContaining('Padrões CONAMA nº 357/2005'), findsOneWidget);
+      expect(find.byKey(const Key('historical_water_comparison_card')), findsOneWidget);
+      expect(find.byKey(const Key('water_analysis_card_wat-psa-01-c2')), findsOneWidget);
+
+      // Filtra pelo ponto PC-MUDA-01 e verifica que tanto o laudo conforme (2ª campanha) quanto o com violação (1ª campanha) estão visíveis
+      await tester.tap(find.byKey(const Key('water_filter_point_pt-muda-01')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('water_analysis_card_wat-muda-01-c2')), findsOneWidget);
+      expect(find.byKey(const Key('water_analysis_card_wat-muda-01-c1')), findsOneWidget);
+
+      // 3. Alterna no SegmentedButton para a aba "Conservação Solo (3) • AM-10"
+      await tester.tap(find.textContaining('Conservação Solo'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Unidades Modelo de Conservação do Solo (AM-10)'), findsOneWidget);
+      expect(find.byKey(const Key('soil_unit_card_soil-unit-01')), findsOneWidget);
+
+      // 4. Alterna para o perfil Empresa Contratante (AM-01) e verifica proteção dos acordos sigilosos de solo e laudos restritos de água
+      await tester.runAsync(() => appState.quickLoginAsRole(UserRole.empresa));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('ACORDO INDIVIDUAL E CAR/CPF RESTRITOS (AM-01)'), findsWidgets);
+      expect(find.byKey(const Key('open_new_soil_unit_dialog_button')), findsNothing);
     });
   });
 }

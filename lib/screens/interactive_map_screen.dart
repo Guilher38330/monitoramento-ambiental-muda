@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:latlong2/latlong.dart' hide Path;
 import '../models/project_models.dart';
 import '../models/user_profile.dart';
 import '../models/water_soil_models.dart';
@@ -361,8 +361,8 @@ class _InteractiveMapScreenState extends State<InteractiveMapScreen> {
 
                     return Marker(
                       point: LatLng(pt.latitude, pt.longitude),
-                      width: 115,
-                      height: 54,
+                      width: 130,
+                      height: 70,
                       child: GestureDetector(
                         key: Key('map_marker_${pt.id}'),
                         onTap: () => _focusOnPoint(pt),

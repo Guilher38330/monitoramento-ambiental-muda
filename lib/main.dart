@@ -1,10 +1,17 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'screens/home_shell_screen.dart';
 import 'screens/login_screen.dart';
 import 'state/app_state.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
   final appState = AppState();
   appState.initialize();
   runApp(MudaPsaApp(appState: appState));
@@ -40,6 +47,70 @@ class MudaPsaApp extends StatelessWidget {
         listenable: appState,
         builder: (context, _) {
           if (!appState.isInitialized) {
+            if (appState.initError != null) {
+              return Scaffold(
+                backgroundColor: const Color(0xFFF3F7F4),
+                body: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.error_outline_rounded,
+                          color: Color(0xFFC62828),
+                          size: 48,
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Falha ao inicializar banco local',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFC62828),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          appState.initError!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: () => appState.initialize(),
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Tentar Novamente'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF1B5E20),
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            OutlinedButton.icon(
+                              onPressed: () =>
+                                  appState.resetDatabaseAndReload(),
+                              icon: const Icon(Icons.restore_page_rounded),
+                              label: const Text('Recriar Banco'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF1B5E20),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+
             return const Scaffold(
               backgroundColor: Color(0xFFF3F7F4),
               body: Center(

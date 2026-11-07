@@ -1,5 +1,8 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart' as p;
-import 'package:sqflite/sqflite.dart';
+
 import '../models/field_form_record.dart';
 import '../models/project_models.dart';
 import '../models/user_profile.dart';
@@ -36,6 +39,10 @@ class DatabaseService {
   }
 
   Future<Database> _initDatabase() async {
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+    }
     final dbRoot = await getDatabasesPath();
     final dbPath = p.join(dbRoot, 'muda_psa_monitoring_v3.db');
     return openDatabase(
@@ -44,6 +51,22 @@ class DatabaseService {
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
+  }
+
+  /// Limpa e reinicializa o banco local com o seed caso o arquivo esteja em estado inconsistente.
+  Future<void> resetDatabase() async {
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+    }
+    final dbRoot = await getDatabasesPath();
+    final dbPath = p.join(dbRoot, 'muda_psa_monitoring_v3.db');
+    if (_database != null && _database!.isOpen) {
+      await _database!.close();
+      _database = null;
+    }
+    await deleteDatabase(dbPath);
+    _database = await _initDatabase();
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {

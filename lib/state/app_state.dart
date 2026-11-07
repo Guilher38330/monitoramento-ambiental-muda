@@ -32,6 +32,8 @@ class AppState extends ChangeNotifier {
   bool _isLoading = false;
   bool _isSyncing = false;
   String? _authError;
+  String? _initError;
+  String? get initError => _initError;
   String? _lastSyncMessage;
 
   AppUser? _currentUser;
@@ -164,9 +166,34 @@ class AppState extends ChangeNotifier {
         _activeJwtToken = savedSession.jwtToken;
       }
       _isInitialized = true;
+      _initError = null;
+    } catch (e, stack) {
+      debugPrint('Erro na inicializacao SQLite: $e\n$stack');
+      _initError = e.toString();
     } finally {
       _isLoading = false;
       _initializingFuture = null;
+      notifyListeners();
+    }
+  }
+
+  /// Reinicia o banco SQLite local com os dados originais de seed caso ocorra algum erro
+  Future<void> resetDatabaseAndReload() async {
+    _isLoading = true;
+    _initError = null;
+    _isInitialized = false;
+    notifyListeners();
+
+    try {
+      await _dbService.resetDatabase();
+      await _loadDatabaseContent();
+      _isInitialized = true;
+      _initError = null;
+    } catch (e, stack) {
+      debugPrint('Erro ao reiniciar banco SQLite: $e\n$stack');
+      _initError = e.toString();
+    } finally {
+      _isLoading = false;
       notifyListeners();
     }
   }

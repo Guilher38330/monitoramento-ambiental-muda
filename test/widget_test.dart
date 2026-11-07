@@ -5,6 +5,7 @@ import 'package:trabalho_final/main.dart';
 import 'package:trabalho_final/models/user_profile.dart';
 import 'package:trabalho_final/models/water_soil_models.dart';
 import 'package:trabalho_final/services/database_service.dart';
+import 'package:trabalho_final/services/report_export_service.dart';
 import 'package:trabalho_final/state/app_state.dart';
 
 void main() {
@@ -715,6 +716,181 @@ void main() {
 
       expect(find.textContaining('ACORDO INDIVIDUAL E CAR/CPF RESTRITOS (AM-01)'), findsWidgets);
       expect(find.byKey(const Key('open_new_soil_unit_dialog_button')), findsNothing);
+    });
+  });
+
+  group('Fase 4 — Dashboards de Indicadores (AM-08), Relatórios PDF e Planilhas Excel/CSV no Celular (AM-09 + 3º Critério de Aceite)', () {
+    late DatabaseService dbService;
+    late AppState appState;
+
+    Future<void> initPhase4State() async {
+      dbService = DatabaseService.instance;
+      await dbService.initializeForTest(inMemoryDatabasePath);
+      appState = AppState(dbService: dbService);
+      await appState.initialize();
+    }
+
+    test('3º Critério de Aceite: Calcula KPIs consolidados, gera PDF válido (%PDF-) e Planilha CSV com controle rigoroso de sigilo por perfil (AM-01, AM-08, AM-09)', () async {
+      await initPhase4State();
+
+      // 1. Verifica cálculo de KPIs para Todos, Muda e PSA (AM-08)
+      final kpiAll = ReportExportService.calculateKpis(
+        appState: appState,
+        programFilter: 'TODOS',
+      );
+      expect(kpiAll.projectsCount, equals(2));
+      expect(kpiAll.propertiesCount, equals(4));
+      expect(kpiAll.collectionPointsCount, equals(6));
+      expect(kpiAll.totalRestorationAreaHa, greaterThan(100.0));
+      expect(kpiAll.totalTargetSeedlings, equals(127000));
+      expect(kpiAll.averageSurvivalRatePercent, closeTo(88.3, 0.2));
+      expect(kpiAll.waterAnalysesCount, equals(5));
+      expect(kpiAll.waterCompliantCount, equals(3));
+      expect(kpiAll.conamaCompliancePercent, closeTo(60.0, 0.1));
+      expect(kpiAll.soilUnitsCount, equals(3));
+      expect(kpiAll.totalErosionAbatementTonYear, greaterThan(500.0));
+
+      final kpiMuda = ReportExportService.calculateKpis(
+        appState: appState,
+        programFilter: 'MUDA',
+      );
+      expect(kpiMuda.projectsCount, equals(1));
+      expect(kpiMuda.totalTargetSeedlings, equals(85000));
+
+      final kpiPsa = ReportExportService.calculateKpis(
+        appState: appState,
+        programFilter: 'PSA',
+      );
+      expect(kpiPsa.projectsCount, equals(1));
+      expect(kpiPsa.totalTargetSeedlings, equals(42000));
+
+      // Caso de borda: filtro inexistente retorna KPIs zerados sem divisão por zero (NaN)
+      final kpiEmpty = ReportExportService.calculateKpis(
+        appState: appState,
+        programFilter: 'FILTRO_INEXISTENTE',
+      );
+      expect(kpiEmpty.projectsCount, equals(0));
+      expect(kpiEmpty.averageSurvivalRatePercent, equals(0.0));
+      expect(kpiEmpty.conamaCompliancePercent, equals(0.0));
+      expect(kpiEmpty.averageSoilVegetalCoverPercent, equals(0.0));
+
+      // 2. Testa Geração de PDF e Planilha CSV com perfil Equipe Técnica / Admin (sigilo autorizado - AM-01)
+      await appState.quickLoginAsRole(UserRole.tecnico);
+
+      final pdfBytesTecnico =
+          await ReportExportService.generateTechnicalReportPdfBytes(
+        appState: appState,
+        programFilter: 'TODOS',
+      );
+      expect(pdfBytesTecnico.lengthInBytes, greaterThan(2000));
+      // Assinatura mágica de arquivo PDF ("%PDF-")
+      final pdfHeader = String.fromCharCodes(pdfBytesTecnico.take(5));
+      expect(pdfHeader, equals('%PDF-'));
+
+      final csvTecnico = ReportExportService.generateSpreadsheetCsvContent(
+        appState: appState,
+        programFilter: 'TODOS',
+      );
+      expect(csvTecnico, contains('SECAO 1 - INDICADORES CONSOLIDADOS (AM-08)'));
+      expect(csvTecnico, contains('SECAO 3 - LAUDOS DE QUALIDADE DA AGUA CONAMA 357/2005'));
+      expect(csvTecnico, contains('418.920.330-53')); // CPF visível para Técnico/Admin
+
+      // 3. Testa Geração de PDF e Planilha CSV com perfil Empresa Contratante (mascaramento obrigatório AM-01)
+      await appState.quickLoginAsRole(UserRole.empresa);
+
+      final pdfBytesEmpresa =
+          await ReportExportService.generateTechnicalReportPdfBytes(
+        appState: appState,
+        programFilter: 'TODOS',
+      );
+      expect(pdfBytesEmpresa.lengthInBytes, greaterThan(2000));
+      expect(String.fromCharCodes(pdfBytesEmpresa.take(5)), equals('%PDF-'));
+
+      final csvEmpresa = ReportExportService.generateSpreadsheetCsvContent(
+        appState: appState,
+        programFilter: 'TODOS',
+      );
+      expect(csvEmpresa, contains('NAO (DADOS SIGILOSOS MASCARADOS)'));
+      expect(csvEmpresa, isNot(contains('418.920.330-53'))); // CPF jamais exposto para Empresa!
+      expect(csvEmpresa, contains('Restrito - LGPD/Sigilo'));
+      expect(csvEmpresa, contains('Sigilo Contratual (AM-01)'));
+      expect(csvEmpresa, contains('OBSERVACAO TECNICA SIGILOSA PROTEGIDA (AM-01)'));
+    });
+
+    testWidgets('Fluxo UI Fase 4: Dashboard de Indicadores, Gráficos fl_chart e Compartilhamento de Relatórios PDF e Excel/CSV no Celular (AM-08, AM-09)', (WidgetTester tester) async {
+      await tester.runAsync(() async {
+        await initPhase4State();
+      });
+
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.runAsync(() => appState.quickLoginAsRole(UserRole.admin));
+      await tester.pumpWidget(MudaPsaApp(appState: appState));
+      await tester.pumpAndSettle();
+
+      // 1. Navega para a Aba 5 "Indicadores" (index 4)
+      await tester.tap(find.text('Indicadores'));
+      await tester.pumpAndSettle();
+
+      // Verifica renderização dos KPIs e dos 3 Gráficos Interativos fl_chart (AM-08)
+      expect(find.byKey(const Key('kpi_card_restored_area')), findsOneWidget);
+      expect(find.byKey(const Key('kpi_card_seedlings_survival')), findsOneWidget);
+      expect(find.byKey(const Key('kpi_card_conama_compliance')), findsOneWidget);
+      expect(find.byKey(const Key('kpi_card_soil_conservation')), findsOneWidget);
+
+      expect(find.byKey(const Key('chart_card_seedling_survival')), findsOneWidget);
+      expect(find.byKey(const Key('chart_card_water_conama')), findsOneWidget);
+      expect(find.byKey(const Key('chart_card_schedule_and_soil')), findsOneWidget);
+
+      // 2. Testa filtro por Programa ('Programa Muda' e 'Programa PSA')
+      await tester.tap(find.byKey(const Key('dashboard_filter_muda')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Escopo: MUDA'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('dashboard_filter_psa')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Escopo: PSA'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('dashboard_filter_todos')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Escopo: TODOS'), findsOneWidget);
+
+      // 3. Gera e visualiza Relatório Técnico PDF direto no celular (AM-09 + 3º Critério de Aceite)
+      final pdfBtn = find.byKey(const Key('btn_generate_share_pdf_report'));
+      await tester.ensureVisible(pdfBtn);
+      await tester.runAsync(() async {
+        await tester.tap(pdfBtn);
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+      });
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('pdf_report_preview_dialog')), findsOneWidget);
+      expect(find.textContaining('Documento PDF Gerado Localmente'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('close_pdf_preview_dialog_button')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('report_export_feedback_banner')), findsOneWidget);
+
+      // 4. Alterna para Empresa Contratante e abre a Exportação Planilha Excel/CSV verificando mascaramento AM-01
+      await tester.runAsync(() => appState.quickLoginAsRole(UserRole.empresa));
+      await tester.pumpAndSettle();
+
+      final csvBtn = find.byKey(const Key('btn_export_share_csv_spreadsheet'));
+      await tester.ensureVisible(csvBtn);
+      await tester.tap(csvBtn);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('csv_spreadsheet_preview_dialog')), findsOneWidget);
+      expect(
+        find.textContaining('Perfil Empresa Contratante (AM-01): Dados sigilosos'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('close_csv_preview_dialog_button')));
+      await tester.pumpAndSettle();
     });
   });
 }

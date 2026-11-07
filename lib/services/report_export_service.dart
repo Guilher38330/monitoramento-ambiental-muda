@@ -201,7 +201,7 @@ class ReportExportService {
 
     final doc = pw.Document(
       title: 'Relatorio Tecnico Monitoramento Muda e PSA ($programFilter)',
-      author: '${user.name} - ${user.role.label}',
+      author: _sanitizePdfText('${user.name} - ${user.role.label}'),
       subject:
           'Monitoramento Ambiental Consolidado (AM-08 / AM-09 / CONAMA 357/2005)',
       creator: 'EcoMonitor Muda & PSA Mobile App',
@@ -261,7 +261,9 @@ class ReportExportService {
                 ),
                 child: pw.Text(
                   canViewConfidential
-                      ? 'PERFIL: ${user.role.shortBadge} (SIGILO AUTORIZADO)'
+                      ? _sanitizePdfText(
+                          'PERFIL: ${user.role.shortBadge} (SIGILO AUTORIZADO)',
+                        )
                       : 'PERFIL: EMPRESA (SIGILO PROTEGIDO AM-01)',
                   style: pw.TextStyle(
                     color: headerTextWhite,
@@ -283,7 +285,9 @@ class ReportExportService {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Text(
-                'Responsavel pela emissao: ${user.name} (${user.registrationCode}) - ${user.role.label}',
+                _sanitizePdfText(
+                  'Responsavel pela emissao: ${user.name} (${user.registrationCode}) - ${user.role.label}',
+                ),
                 style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
               ),
               pw.Text(
@@ -821,17 +825,35 @@ class ReportExportService {
     return cleaned;
   }
 
-  /// Normaliza acentuação e caracteres especiais para garantir compatibilidade
-  /// total com a fonte Helvetica padrão do PDF sem warnings de glifos Unicode.
+  /// Normaliza acentuação e caracteres especiais para ASCII puro (32..126),
+  /// garantindo compatibilidade total com a fonte Helvetica padrão do PDF sem warnings Unicode.
   static String _sanitizePdfText(String input) {
-    return input
-        .replaceAll('—', '-')
-        .replaceAll('–', '-')
-        .replaceAll('•', '*')
-        .replaceAll('º', 'o')
-        .replaceAll('ª', 'a')
-        .replaceAll('₅', '5')
-        .replaceAll('₂', '2')
-        .replaceAll('₀', '0');
+    const diacriticsMap = <String, String>{
+      'á': 'a', 'à': 'a', 'â': 'a', 'ã': 'a', 'ä': 'a',
+      'Á': 'A', 'À': 'A', 'Â': 'A', 'Ã': 'A', 'Ä': 'A',
+      'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
+      'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E',
+      'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
+      'Í': 'I', 'Ì': 'I', 'Î': 'I', 'Ï': 'I',
+      'ó': 'o', 'ò': 'o', 'ô': 'o', 'õ': 'o', 'ö': 'o',
+      'Ó': 'O', 'Ò': 'O', 'Ô': 'O', 'Õ': 'O', 'Ö': 'O',
+      'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
+      'Ú': 'U', 'Ù': 'U', 'Û': 'U', 'Ü': 'U',
+      'ç': 'c', 'Ç': 'C', 'ñ': 'n', 'Ñ': 'N',
+      '—': '-', '–': '-', '•': '*', 'º': 'o', 'ª': 'a',
+      '₅': '5', '₂': '2', '₀': '0', '±': '+/-',
+    };
+    final sb = StringBuffer();
+    for (var i = 0; i < input.length; i++) {
+      final ch = input[i];
+      final mapped = diacriticsMap[ch];
+      if (mapped != null) {
+        sb.write(mapped);
+      } else {
+        final code = ch.codeUnitAt(0);
+        sb.write((code >= 32 && code <= 126) ? ch : ' ');
+      }
+    }
+    return sb.toString();
   }
 }

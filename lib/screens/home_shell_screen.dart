@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/user_profile.dart';
 import '../state/app_state.dart';
+import 'dashboard_reports_screen.dart';
 import 'field_forms_sync_screen.dart';
 import 'interactive_map_screen.dart';
 import 'projects_screen.dart';
-import 'water_soil_analysis_screen.dart';
 
 /// Shell principal pós-autenticação:
 /// - AppBar com perfil ativo (ADMIN / TÉCNICO / EMPRESA), troca rápida de perfil e inspetor de Token JWT
@@ -172,6 +172,9 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
         selectedIndex: _selectedTabIndex,
         onDestinationSelected: (index) {
           setState(() {
+            if (index == 4 && _selectedTabIndex != 4) {
+              _focusedWaterPointId = null;
+            }
             _selectedTabIndex = index;
           });
         },
@@ -368,10 +371,10 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
         );
       case 4:
       default:
-        return WaterSoilAnalysisScreen(
-          key: ValueKey('tab_water_soil_${_focusedWaterPointId ?? "all"}'),
+        return DashboardReportsScreen(
+          key: ValueKey('tab_dashboard_${_focusedWaterPointId ?? "all"}'),
           appState: widget.appState,
-          initialPointId: _focusedWaterPointId,
+          initialWaterPointId: _focusedWaterPointId,
         );
     }
   }

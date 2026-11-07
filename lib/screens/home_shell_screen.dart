@@ -29,6 +29,7 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
   @override
   Widget build(BuildContext context) {
     final user = widget.appState.currentUser!;
+    final pendingCount = widget.appState.pendingSyncCount;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F7F4),
@@ -170,6 +171,8 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
       bottomNavigationBar: NavigationBar(
         key: const Key('main_bottom_navigation'),
         selectedIndex: _selectedTabIndex,
+        height: 68,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         onDestinationSelected: (index) {
           setState(() {
             if (index == 4 && _selectedTabIndex != 4) {
@@ -178,31 +181,53 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
             _selectedTabIndex = index;
           });
         },
-        destinations: const [
-          NavigationDestination(
+        destinations: [
+          const NavigationDestination(
+            key: Key('nav_destination_projects'),
             icon: Icon(Icons.folder_special_outlined),
             selectedIcon: Icon(Icons.folder_special_rounded),
-            label: 'Projetos & Áreas',
+            label: 'Projetos',
+            tooltip: 'Projetos & Áreas (AM-02)',
           ),
-          NavigationDestination(
+          const NavigationDestination(
+            key: Key('nav_destination_field_collection'),
             icon: Icon(Icons.add_location_alt_outlined),
             selectedIcon: Icon(Icons.add_location_alt_rounded),
-            label: 'Coleta Campo',
+            label: 'Coleta',
+            tooltip: 'Nova Coleta de Campo (AM-03, AM-05)',
           ),
           NavigationDestination(
-            icon: Icon(Icons.sync_outlined),
-            selectedIcon: Icon(Icons.sync_rounded),
-            label: 'Coleta & Sync',
+            key: const Key('nav_destination_sync'),
+            icon: pendingCount > 0
+                ? Badge.count(
+                    count: pendingCount,
+                    backgroundColor: const Color(0xFF0277BD),
+                    child: const Icon(Icons.sync_outlined),
+                  )
+                : const Icon(Icons.sync_outlined),
+            selectedIcon: pendingCount > 0
+                ? Badge.count(
+                    count: pendingCount,
+                    backgroundColor: const Color(0xFF0277BD),
+                    child: const Icon(Icons.sync_rounded),
+                  )
+                : const Icon(Icons.sync_rounded),
+            label: 'Sync',
+            tooltip: 'Fila de Sincronização & Auditoria (AM-04, AM-11)',
           ),
-          NavigationDestination(
+          const NavigationDestination(
+            key: Key('nav_destination_map'),
             icon: Icon(Icons.map_outlined),
             selectedIcon: Icon(Icons.map_rounded),
-            label: 'Mapa & Histórico',
+            label: 'Mapa',
+            tooltip: 'Mapa Interativo & Camadas KML (AM-06)',
           ),
-          NavigationDestination(
+          const NavigationDestination(
+            key: Key('nav_destination_indicators'),
             icon: Icon(Icons.insights_outlined),
             selectedIcon: Icon(Icons.insights_rounded),
             label: 'Indicadores',
+            tooltip: 'Dashboards & Relatórios PDF/CSV (AM-08, AM-09)',
           ),
         ],
       ),

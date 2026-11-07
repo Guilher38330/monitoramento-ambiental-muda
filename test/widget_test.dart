@@ -383,8 +383,8 @@ void main() {
       await tester.pumpWidget(MudaPsaApp(appState: appState));
       await tester.pumpAndSettle();
 
-      // Navega para a aba "Coleta & Sync" (index 2)
-      await tester.tap(find.text('Coleta & Sync'));
+      // Navega para a aba "Sync" (index 2)
+      await tester.tap(find.byKey(const Key('nav_destination_sync')));
       await tester.pumpAndSettle();
 
       // Verifica que a lista exibe os registros de seed e o botão de sincronizar fila
@@ -489,8 +489,8 @@ void main() {
       expect(find.textContaining('OBSERVAÇÃO TÉCNICA SIGILOSA PROTEGIDA (AM-01)'), findsWidgets);
       expect(find.textContaining('marco divisório do TCA judicial'), findsNothing);
 
-      // Navega para a aba "Coleta Campo" (index 1) como Empresa e verifica bloqueio somente leitura
-      await tester.tap(find.text('Coleta Campo'));
+      // Navega para a aba "Coleta" (index 1) como Empresa e verifica bloqueio somente leitura
+      await tester.tap(find.byKey(const Key('nav_destination_field_collection')));
       await tester.pumpAndSettle();
       expect(find.textContaining('Acesso Somente Leitura — Perfil Empresa Contratante (AM-01)'), findsOneWidget);
     });
@@ -662,8 +662,8 @@ void main() {
       await tester.pumpWidget(MudaPsaApp(appState: appState));
       await tester.pumpAndSettle();
 
-      // 1. Navega para a aba "Mapa & Histórico" (index 3 - AM-06)
-      await tester.tap(find.text('Mapa & Histórico'));
+      // 1. Navega para a aba "Mapa" (index 3 - AM-06)
+      await tester.tap(find.byKey(const Key('nav_destination_map')));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('interactive_flutter_map_container')), findsOneWidget);
@@ -875,7 +875,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // 1. Navega para a Aba 5 "Indicadores" (index 4)
-      await tester.tap(find.text('Indicadores'));
+      await tester.tap(find.byKey(const Key('nav_destination_indicators')));
       await tester.pumpAndSettle();
 
       // Verifica renderização dos KPIs e dos 3 Gráficos Interativos fl_chart (AM-08)

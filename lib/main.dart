@@ -42,6 +42,27 @@ class MudaPsaApp extends StatelessWidget {
           centerTitle: false,
           elevation: 0,
         ),
+        navigationBarTheme: NavigationBarThemeData(
+          height: 68,
+          indicatorColor: const Color(0xFFC8E6C9),
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            final isSelected = states.contains(WidgetState.selected);
+            return TextStyle(
+              fontSize: 11,
+              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+              color: isSelected ? const Color(0xFF1B5E20) : const Color(0xFF37474F),
+              letterSpacing: -0.2,
+            );
+          }),
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            final isSelected = states.contains(WidgetState.selected);
+            return IconThemeData(
+              size: 23,
+              color: isSelected ? const Color(0xFF1B5E20) : const Color(0xFF455A64),
+            );
+          }),
+        ),
       ),
       home: ListenableBuilder(
         listenable: appState,

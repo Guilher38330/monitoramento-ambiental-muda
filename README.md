@@ -79,7 +79,7 @@ Presente no topo do `HomeShellScreen`, permite testar todos os cenários crític
 
 A navegação principal pós-login é estruturada em **5 abas inferiores (`NavigationBar`)**:
 
-### Aba 1 — Projetos & Áreas (`lib/screens/projects_screen.dart`)
+### Aba 1 — Projetos (`lib/screens/projects_screen.dart`)
 - **Requisitos atendidos**: `AM-01`, `AM-02`.
 - Lista projetos dos programas **Muda** e **PSA**, com filtro por programa (`TODOS`, `MUDA`, `PSA`) e busca textual por nome, código, bacia hidrográfica ou propriedade rural.
 - Ao abrir um projeto (`ProjectDetailScreen`), apresenta 4 sub-abas:
@@ -88,21 +88,22 @@ A navegação principal pós-login é estruturada em **5 abas inferiores (`Navig
   3. **Etapas & Cronograma**: linha do tempo das etapas físicas do projeto com percentual de avanço e entregáveis.
   4. **Documentos Autorizados**: licenças, termos de adesão PSA, planos técnicos e laudos com controle de sigilo por documento.
 
-### Aba 2 — Coleta Campo (`lib/screens/field_forms_sync_screen.dart` — Seção Nova Coleta)
+### Aba 2 — Coleta (`lib/screens/field_forms_sync_screen.dart` — Seção Nova Coleta)
 - **Requisitos atendidos**: `AM-01`, `AM-03`, `AM-05`, `AM-11`.
 - Formulário estruturado conforme modelos da plataforma (*Vistoria de Sobrevivência de Mudas*, *Monitoramento de APP e Nascente*, *Inspeção de Erosão e Cercamento*).
 - **Validação obrigatória de campos**: percentual de sobrevivência (`0%` a `100%`), estágio da vegetação, status de erosão, presença de exóticas invasoras, manutenção realizada e observações técnicas.
 - **Captura de Coordenadas GPS e Fotos Georreferenciadas (`AM-05`)**: suporta captura via hardware (`geolocator` + `image_picker`) e modo de **Captura Georreferenciada de Demonstração** com carimbo de latitude, longitude, precisão em metros e timestamp UTC.
 - Para o perfil `Empresa Contratante`, exibe banner de bloqueio somente leitura (**AM-01**).
 
-### Aba 3 — Coleta & Sync (`lib/screens/field_forms_sync_screen.dart` — Central de Sincronização)
+### Aba 3 — Sync (`lib/screens/field_forms_sync_screen.dart` — Central de Sincronização)
 - **Requisitos atendidos**: `AM-04`, `AM-11`, `AM-12`, **1º e 2º Critérios de Aceite**.
 - Painel da fila local SQLite com filtros (`TODOS`, `NA FILA`, `SINCRONIZADOS`, `CONFLITOS`).
+- **Badge Dinâmico na Barra**: exibe no ícone da aba a contagem de coletas pendentes offline em tempo real.
 - **Sincronização Idempotente**: cada coleta recebe um `clientUuid` único gerado offline; reenvios repetidos atualizam o mesmo registro sem jamais duplicar entradas.
 - **Resolução de Conflitos (`AM-04`)**: modal comparativo lado a lado permitindo escolher entre *Manter Versão de Campo* ou *Aceitar Versão da Plataforma*.
 - **Trilha de Auditoria e Autoria (`AM-11`)**: modal detalhando todas as operações (`CRIACAO_OFFLINE`, `FALHA_REDE_AM12`, `CONFLITO_DETECTADO`, `SINCRONIZADO_SERVIDOR`) com autor, perfil, versão e data/hora de sincronização.
 
-### Aba 4 — Mapa & Histórico (`lib/screens/interactive_map_screen.dart`)
+### Aba 4 — Mapa (`lib/screens/interactive_map_screen.dart`)
 - **Requisitos atendidos**: `AM-06`, `AM-07`.
 - Mapa interativo (`flutter_map`) exibindo:
   - Polígonos georreferenciados das propriedades rurais e áreas de restauração;
@@ -110,7 +111,7 @@ A navegação principal pós-login é estruturada em **5 abas inferiores (`Navig
   - **Croqui Técnico Esquemático** (`CustomPaint`) e inspetor do código XML KML processado (`SIRGAS 2000 / UTM 22S`);
   - Marcadores clicáveis dos **Pontos de Coleta** com ficha consolidada de histórico de vistorias, qualidade da água e botão de salto rápido para os laudos do ponto.
 
-### Aba 5 — Indicadores & Relatórios (`lib/screens/dashboard_reports_screen.dart` + `lib/screens/water_soil_analysis_screen.dart`)
+### Aba 5 — Indicadores (`lib/screens/dashboard_reports_screen.dart` + `lib/screens/water_soil_analysis_screen.dart`)
 - **Requisitos atendidos**: `AM-07`, `AM-08`, `AM-09`, `AM-10`, **3º Critério de Aceite**.
 - Possui seletor superior alternando entre duas visões complementares:
   1. **Dashboards & Relatórios (`AM-08` / `AM-09`)**:

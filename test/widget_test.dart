@@ -815,6 +815,47 @@ void main() {
       expect(csvEmpresa, contains('Restrito - LGPD/Sigilo'));
       expect(csvEmpresa, contains('Sigilo Contratual (AM-01)'));
       expect(csvEmpresa, contains('OBSERVACAO TECNICA SIGILOSA PROTEGIDA (AM-01)'));
+      expect(csvEmpresa, contains('LAUDO COMPLEMENTAR RESTRITO (AM-01)'));
+
+      // 4. Caso de borda: Textos longos multiparágrafo, emojis (surrogates UTF-16) e delimitadores CSV (';' e '"')
+      await appState.quickLoginAsRole(UserRole.tecnico);
+      final longEmojiNote =
+          'Relato extenso de campo 🌳💧🔬: ${"Observação detalhada com ponto-e-vírgula; e \"aspas duplas\" em múltiplas linhas.\n" * 18}';
+      await appState.saveFieldFormRecord(
+        customClientUuid: 'uuid-edge-long-emoji-01',
+        projectId: 'proj-muda-01',
+        propertyId: 'prop-muda-01',
+        pointId: 'pt-muda-01',
+        templateName: 'Vistoria de Sobrevivência de Mudas (Muda)',
+        vegetationStage: 'Estágio Inicial — Pegamento de Mudas (0 a 12 meses)',
+        survivalRatePercent: 93.0,
+        erosionStatus: 'Ausente — Solo Estabilizado com Cobertura Vegetal',
+        invasiveSpeciesPresent: false,
+        maintenancePerformed: 'Coroamento Manual + Controle de Formigas Cortadeiras',
+        technicalNotes: longEmojiNote,
+        isConfidential: false,
+        latitude: -29.7132,
+        longitude: -52.4295,
+        gpsAccuracyMeters: 2.5,
+        photoLocalPath: 'demo://edge_emoji.jpg',
+        photoCapturedAt: '2026-11-06T15:00:00Z',
+        photoCaption: 'Foto com emoji 📸 e ; ponto e vírgula',
+      );
+
+      final pdfMultiPageBytes =
+          await ReportExportService.generateTechnicalReportPdfBytes(
+        appState: appState,
+        programFilter: 'MUDA',
+      );
+      expect(pdfMultiPageBytes.lengthInBytes, greaterThan(2000));
+      expect(String.fromCharCodes(pdfMultiPageBytes.take(5)), equals('%PDF-'));
+
+      final csvEscaped = ReportExportService.generateSpreadsheetCsvContent(
+        appState: appState,
+        programFilter: 'MUDA',
+      );
+      // Verifica que o valor com ';' e '"' foi devidamente escapado entre aspas duplas ("...""aspas duplas""...")
+      expect(csvEscaped, contains('""aspas duplas""'));
     });
 
     testWidgets('Fluxo UI Fase 4: Dashboard de Indicadores, Gráficos fl_chart e Compartilhamento de Relatórios PDF e Excel/CSV no Celular (AM-08, AM-09)', (WidgetTester tester) async {

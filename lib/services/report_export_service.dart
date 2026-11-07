@@ -473,34 +473,39 @@ class ReportExportService {
           pw.SizedBox(height: 6),
           pw.TableHelper.fromTextArray(
             headerStyle: pw.TextStyle(
-              fontSize: 7.2,
+              fontSize: 6.8,
               fontWeight: pw.FontWeight.bold,
             ),
-            cellStyle: const pw.TextStyle(fontSize: 7.2),
+            cellStyle: const pw.TextStyle(fontSize: 6.8),
             headers: const [
               'Laudo / Data',
               'Ponto',
-              'pH (6-9)',
-              'Turb. (<=100)',
-              'OD (>=5)',
-              'DBO (<=5)',
-              'P Total (<=0.05)',
-              'Colif. (<=1000)',
+              'pH',
+              'Turb.',
+              'OD',
+              'DBO',
+              'P Total',
+              'Colif.',
               'Status CONAMA',
+              'Notas Lab (AM-01)',
             ],
             data: waterAnalyses.map((w) {
+              final labNoteDisplay = (!w.isConfidentialReport || canViewConfidential)
+                  ? _sanitizePdfText(w.confidentialLabNotes)
+                  : 'RESTRITO (AM-01)';
               return [
-                '${w.reportCode} (${w.sampleDate})',
-                w.pointId.toUpperCase(),
+                '${_sanitizePdfText(w.reportCode)} (${_sanitizePdfText(w.sampleDate)})',
+                _sanitizePdfText(w.pointId.toUpperCase()),
                 w.ph.toStringAsFixed(1),
-                '${w.turbidityUnt.toStringAsFixed(1)} UNT',
-                '${w.dissolvedOxygenMgL.toStringAsFixed(1)} mg/L',
-                '${w.dboMgL.toStringAsFixed(1)} mg/L',
-                '${w.totalPhosphorusMgL.toStringAsFixed(3)} mg/L',
+                w.turbidityUnt.toStringAsFixed(1),
+                w.dissolvedOxygenMgL.toStringAsFixed(1),
+                w.dboMgL.toStringAsFixed(1),
+                w.totalPhosphorusMgL.toStringAsFixed(3),
                 '${w.thermotolerantColiformsNmp}',
                 w.isConamaCompliant
                     ? 'CONFORME'
                     : 'VIOLACAO (${w.violations.length})',
+                labNoteDisplay,
               ];
             }).toList(),
           ),
@@ -825,8 +830,8 @@ class ReportExportService {
     return cleaned;
   }
 
-  /// Normaliza acentuação e caracteres especiais para ASCII puro (32..126),
-  /// garantindo compatibilidade total com a fonte Helvetica padrão do PDF sem warnings Unicode.
+  /// Normaliza acentuação, emojis e caracteres especiais para ASCII puro (32..126),
+  /// garantindo compatibilidade total com a fonte Helvetica padrão do PDF.
   static String _sanitizePdfText(String input) {
     const diacriticsMap = <String, String>{
       'á': 'a', 'à': 'a', 'â': 'a', 'ã': 'a', 'ä': 'a',
@@ -844,16 +849,23 @@ class ReportExportService {
       '₅': '5', '₂': '2', '₀': '0', '±': '+/-',
     };
     final sb = StringBuffer();
-    for (var i = 0; i < input.length; i++) {
-      final ch = input[i];
+    for (final rune in input.runes) {
+      if (rune >= 32 && rune <= 126) {
+        sb.writeCharCode(rune);
+        continue;
+      }
+      if (rune == 10 || rune == 13) {
+        sb.write(' ');
+        continue;
+      }
+      final ch = String.fromCharCode(rune);
       final mapped = diacriticsMap[ch];
       if (mapped != null) {
         sb.write(mapped);
       } else {
-        final code = ch.codeUnitAt(0);
-        sb.write((code >= 32 && code <= 126) ? ch : ' ');
+        sb.write(' ');
       }
     }
-    return sb.toString();
+    return sb.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 }

@@ -19,17 +19,17 @@ function Create-AppIcons {
     $bgBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
         (New-Object System.Drawing.PointF(0, 0)),
         (New-Object System.Drawing.PointF($width, $height)),
-        [System.Drawing.Color]::FromArgb(255, 27, 94, 32),   # #1B5E20
-        [System.Drawing.Color]::FromArgb(255, 0, 77, 64)     # #004D40
+        [System.Drawing.Color]::FromArgb(255, 27, 94, 32),   # #1B5E20 Deep Forest Green
+        [System.Drawing.Color]::FromArgb(255, 0, 77, 64)     # #004D40 Deep Teal
     )
     $bgG.FillRectangle($bgBrush, $rect)
     $bgBrush.Dispose()
 
-    # Subtle concentric radial ambient glow in the center
+    # Subtle concentric radial ambient glow in the center for depth
     $glowPath = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $glowPath.AddEllipse(112, 112, 800, 800)
+    $glowPath.AddEllipse(64, 64, 896, 896)
     $glowBrush = New-Object System.Drawing.Drawing2D.PathGradientBrush($glowPath)
-    $glowBrush.CenterColor = [System.Drawing.Color]::FromArgb(40, 200, 230, 201) # light green soft glow
+    $glowBrush.CenterColor = [System.Drawing.Color]::FromArgb(50, 165, 214, 167) # #A5D6A7 soft center glow
     $glowBrush.SurroundColors = @([System.Drawing.Color]::FromArgb(0, 27, 94, 32))
     $bgG.FillPath($glowBrush, $glowPath)
     $glowBrush.Dispose()
@@ -47,11 +47,18 @@ function Create-AppIcons {
         $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
         $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
 
-        # Safe area center is (512, 512). Artwork fits within ~560x560 bounding box.
-        # Safe zone radius is 340px (from 172 to 852).
+        # We apply a matrix scale and translation so the artwork is perfectly sized and centered
+        # Original center was roughly (500, 510). We scale by 1.26 to optimize screen presence.
+        $origCenterX = 500.0
+        $origCenterY = 510.0
+        $scale = 1.26
         
+        $state = $g.Save()
+        $g.TranslateTransform(512.0, 512.0)
+        $g.ScaleTransform($scale, $scale)
+        $g.TranslateTransform(-$origCenterX, -$origCenterY)
+
         # 1. Back droplet (representing Hydrology / Water Resources / PSA)
-        # Droplet coordinates: Top peak at (570, 240), bulb curving down to (690, 560), base at (570, 740), left curve at (450, 560)
         $dropPath = New-Object System.Drawing.Drawing2D.GraphicsPath
         $dropPoints = @(
             (New-Object System.Drawing.PointF(575, 235)), # Top tip
@@ -74,8 +81,8 @@ function Create-AppIcons {
             $dropBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
                 (New-Object System.Drawing.PointF(520, 235)),
                 (New-Object System.Drawing.PointF(700, 745)),
-                [System.Drawing.Color]::FromArgb(245, 0, 150, 136),   # #009688
-                [System.Drawing.Color]::FromArgb(245, 77, 208, 225)   # #4DD0E1
+                [System.Drawing.Color]::FromArgb(250, 0, 150, 136),   # #009688
+                [System.Drawing.Color]::FromArgb(250, 77, 208, 225)   # #4DD0E1
             )
             $g.FillPath($dropBrush, $dropPath)
             $dropBrush.Dispose()
@@ -91,14 +98,13 @@ function Create-AppIcons {
                 (New-Object System.Drawing.PointF(575, 300))
             )
             $specPath.AddClosedCurve($specPoints, 0.5)
-            $specBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(120, 255, 255, 255))
+            $specBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(130, 255, 255, 255))
             $g.FillPath($specBrush, $specPath)
             $specBrush.Dispose()
             $specPath.Dispose()
         }
 
         # 2. Main Seedling / Plant Stem (Recomposição Florestal / Muda)
-        # Rising from bottom (440, 770) curving smoothly up to (480, 460)
         $stemPath = New-Object System.Drawing.Drawing2D.GraphicsPath
         $stemPoints = @(
             (New-Object System.Drawing.PointF(445, 775)),
@@ -121,7 +127,6 @@ function Create-AppIcons {
         }
 
         # 3. Primary Leaf (Large, arching proudly to the left)
-        # Tip at (295, 390), base at (480, 520)
         $leaf1Path = New-Object System.Drawing.Drawing2D.GraphicsPath
         $leaf1Points = @(
             (New-Object System.Drawing.PointF(480, 520)), # Stem joint
@@ -155,7 +160,7 @@ function Create-AppIcons {
                 (New-Object System.Drawing.PointF(390, 475)),
                 (New-Object System.Drawing.PointF(300, 415))
             )
-            $rib1Pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(180, 232, 245, 233), 7)
+            $rib1Pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(190, 232, 245, 233), 7)
             $rib1Pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
             $rib1Pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
             $g.DrawCurve($rib1Pen, $rib1Points)
@@ -165,7 +170,6 @@ function Create-AppIcons {
         $leaf1Path.Dispose()
 
         # 4. Secondary Leaf (Young sprouting leaf, curving up to the top-right over the drop)
-        # Tip at (560, 310), base at (480, 440)
         $leaf2Path = New-Object System.Drawing.Drawing2D.GraphicsPath
         $leaf2Points = @(
             (New-Object System.Drawing.PointF(475, 455)), # Stem joint
@@ -198,7 +202,7 @@ function Create-AppIcons {
                 (New-Object System.Drawing.PointF(515, 395)),
                 (New-Object System.Drawing.PointF(540, 340))
             )
-            $rib2Pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(190, 241, 248, 233), 5)
+            $rib2Pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(200, 241, 248, 233), 5)
             $rib2Pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
             $rib2Pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
             $g.DrawCurve($rib2Pen, $rib2Points)
@@ -207,7 +211,7 @@ function Create-AppIcons {
         }
         $leaf2Path.Dispose()
 
-        # 5. Base soil / fertile ground arc (subtle foundation for the seedling)
+        # 5. Base soil / fertile ground arc
         $groundPath = New-Object System.Drawing.Drawing2D.GraphicsPath
         $groundPoints = @(
             (New-Object System.Drawing.PointF(370, 775)),
@@ -228,6 +232,8 @@ function Create-AppIcons {
         $groundPath.Dispose()
         $stemPath.Dispose()
         $dropPath.Dispose()
+
+        $g.Restore($state)
     }
 
     # 2. Foreground Bitmap (Transparent with full emblem)
@@ -250,12 +256,10 @@ function Create-AppIcons {
     $monoBmp.Save($monoFile, [System.Drawing.Imaging.ImageFormat]::Png)
     Write-Host "Generated $monoFile"
 
-    # 4. Full Icon Bitmap (Background + Subtle drop shadow + Foreground)
+    # 4. Full Icon Bitmap (Background + Foreground)
     $fullBmp = New-Object System.Drawing.Bitmap($width, $height)
     $fullG = [System.Drawing.Graphics]::FromImage($fullBmp)
-    # Draw background
     $fullG.DrawImage($bgBmp, 0, 0, $width, $height)
-    # Draw foreground
     $fullG.DrawImage($fgBmp, 0, 0, $width, $height)
     $fullG.Dispose()
     $fullFile = Join-Path $outputPath "app_icon.png"
@@ -267,7 +271,7 @@ function Create-AppIcons {
     $fgBmp.Dispose()
     $monoBmp.Dispose()
     $fullBmp.Dispose()
-    Write-Host "All master icons generated successfully in $outputPath!"
+    Write-Host "All master icons regenerated successfully in $outputPath!"
 }
 
 Create-AppIcons

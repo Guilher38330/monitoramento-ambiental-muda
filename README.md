@@ -14,6 +14,7 @@ Aplicativo móvel multiplataforma desenvolvido em **Flutter** para gestão integ
 6. [Arquitetura de Dados Local (Schema SQLite `sqflite` v3)](#6-arquitetura-de-dados-local-schema-sqlite-sqflite-v3)
 7. [API REST / JWT Simulada e Sincronização Idempotente](#7-api-rest--jwt-simulada-e-sincronização-idempotente)
 8. [Permissões de Dispositivo Utilizadas](#8-permissões-de-dispositivo-utilizadas)
+9. [Identidade Visual e Ícones do Aplicativo (Android & Web)](#9-identidade-visual-e-ícones-do-aplicativo-android--web)
 
 ---
 
@@ -185,3 +186,22 @@ Configuradas para operação em dispositivos Android/iOS:
 - `ACCESS_FINE_LOCATION` e `ACCESS_COARSE_LOCATION` (`geolocator`): captura de coordenadas GPS de alta precisão nos pontos de coleta em campo (`AM-05`).
 - `CAMERA` e leitura de mídia (`image_picker`): registro fotográfico georreferenciado de nascentes, talhões de mudas e feições erosivas (`AM-05`).
 - `INTERNET`: carregamento opcional de tiles cartográficos OpenStreetMap quando online e compartilhamento de arquivos PDF/CSV (`printing` / `share_plus`). O aplicativo opera integralmente em modo *offline* caso não haja conectividade.
+
+---
+
+## 9. Identidade Visual e Ícones do Aplicativo (Android & Web)
+
+O aplicativo conta com uma identidade visual temática moderna, integrando os objetivos de **Recomposição Florestal (Muda)** e **Proteção de Bacias Hidrográficas (PSA)**:
+
+- **Conceito Visual**: Gota d'água central em gradiente ciano/teal (`#80DEEA` a `#26A69A`), arcos concêntricos de ondas hidrológicas, linhas de telemetria ambiental e uma muda verde viva (`#4CAF50` / `#81C784`) em primeiro plano com contorno de separação branco (*stroke*) e nervuras verde-floresta (`#1B5E20`).
+- **Fundo do Ícone**: Fundo branco *clean* (`#FFFFFF`) com sombra sutil de base, garantindo máximo contraste e legibilidade em qualquer papel de parede ou tema de sistema.
+- **Suporte Multiplataforma**:
+  - **Android 8.0+ (Ícones Adaptativos)**: Configurado em `android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml` com camadas independentes de fundo (`drawable-*/ic_launcher_background.png`) e primeiro plano (`drawable-*/ic_launcher_foreground.png`), respeitando rigorosamente a *safe zone* de 72dp sem cortes em máscaras circulares (Pixel/Samsung) ou squircles (Xiaomi/OnePlus).
+  - **Android 13+ (Ícones Temáticos / Material You)**: Camada monocromática vetorial (`ic_launcher_monochrome.png`) que se adapta automaticamente às cores dinâmicas do papel de parede do usuário.
+  - **Android Legado (Android 5.0 a 7.1)**: Mipmaps completos em todas as densidades (`mdpi`, `hdpi`, `xhdpi`, `xxhdpi`, `xxxhdpi`).
+  - **Web PWA**: `web/favicon.png`, `web/icons/Icon-192.png`, `Icon-512.png` e máscara PWA (`web/manifest.json`).
+- **Pipeline e Reprodução**:
+  - Gerenciado através do pacote oficial `flutter_launcher_icons`.
+  - Ativos mestres em alta resolução (1024×1024) em `assets/icon/`.
+  - Script automatizado de geração em `tool/apply_new_logo_style.ps1`.
+  - Suíte de testes de validação de integridade em `test/app_icon_assets_test.dart` (`flutter test test/app_icon_assets_test.dart`).

@@ -50,6 +50,7 @@ dependencies:
   printing: ^5.15.0
   share_plus: ^10.1.4
   sqflite_common_ffi: ^2.4.5
+  sqflite_common_ffi_web: ^1.2.2
 
 
 dev_dependencies:

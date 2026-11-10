@@ -41,19 +41,36 @@ class DatabaseService {
 
   Future<Database> _initDatabase() async {
     if (kIsWeb) {
-      databaseFactory = databaseFactoryFfiWeb;
+      try {
+        databaseFactory = databaseFactoryFfiWeb;
+      } catch (_) {
+        databaseFactory = databaseFactoryFfiWebNoWebWorker;
+      }
     } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
     }
     final dbRoot = await getDatabasesPath();
     final dbPath = p.join(dbRoot, 'muda_psa_monitoring_v3.db');
-    return openDatabase(
-      dbPath,
-      version: 3,
-      onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
-    );
+    try {
+      return await openDatabase(
+        dbPath,
+        version: 3,
+        onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
+      );
+    } catch (_) {
+      if (kIsWeb) {
+        databaseFactory = databaseFactoryFfiWebNoWebWorker;
+        return await openDatabase(
+          inMemoryDatabasePath,
+          version: 3,
+          onCreate: _onCreate,
+          onUpgrade: _onUpgrade,
+        );
+      }
+      rethrow;
+    }
   }
 
   /// Limpa e reinicializa o banco local com o seed caso o arquivo esteja em estado inconsistente.

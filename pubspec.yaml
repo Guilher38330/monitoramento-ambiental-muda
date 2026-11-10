@@ -89,7 +89,7 @@ flutter_launcher_icons:
   web:
     generate: true
     image_path: "assets/icon/app_icon.png"
-    background_color: "#1B5E20"
+    background_color: "#FFFFFF"
     theme_color: "#1B5E20"
 
   # To add assets to your application, add an assets section, like this:

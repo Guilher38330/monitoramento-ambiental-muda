@@ -1020,6 +1020,30 @@ class _DashboardReportsScreenState extends State<DashboardReportsScreen> {
     }
 
     if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: Color(0xFF2E7D32),
+        behavior: SnackBarBehavior.floating,
+        content: Row(
+          children: [
+            Icon(Icons.check_circle_rounded, color: Colors.white),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Relatório PDF consolidado gerado com sucesso!',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
     final user = widget.appState.currentUser!;
     final kpis = ReportExportService.calculateKpis(
       appState: widget.appState,
@@ -1127,6 +1151,30 @@ class _DashboardReportsScreenState extends State<DashboardReportsScreen> {
                   appState: widget.appState,
                   programFilter: _selectedProgramFilter,
                 );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).clearSnackBars();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      backgroundColor: Color(0xFF2E7D32),
+                      behavior: SnackBarBehavior.floating,
+                      content: Row(
+                        children: [
+                          Icon(Icons.check_circle_rounded, color: Colors.white),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Relatório PDF consolidado gerado com sucesso!',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
               } catch (_) {}
             },
             icon: const Icon(Icons.share_rounded, size: 16),
@@ -1149,6 +1197,30 @@ class _DashboardReportsScreenState extends State<DashboardReportsScreen> {
     });
 
     if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: Color(0xFF2E7D32),
+        behavior: SnackBarBehavior.floating,
+        content: Row(
+          children: [
+            Icon(Icons.check_circle_rounded, color: Colors.white),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Planilha CSV exportada com sucesso!',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
     final user = widget.appState.currentUser!;
 
     await showDialog<void>(
@@ -1226,6 +1298,30 @@ class _DashboardReportsScreenState extends State<DashboardReportsScreen> {
                 appState: widget.appState,
                 programFilter: _selectedProgramFilter,
               );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).clearSnackBars();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: Color(0xFF2E7D32),
+                    behavior: SnackBarBehavior.floating,
+                    content: Row(
+                      children: [
+                        Icon(Icons.check_circle_rounded, color: Colors.white),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Planilha CSV exportada com sucesso!',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
             },
             icon: const Icon(Icons.ios_share_rounded, size: 16),
             label: const Text('Compartilhar Arquivo .CSV'),

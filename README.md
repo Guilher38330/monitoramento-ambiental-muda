@@ -64,15 +64,29 @@ Na tela de login (`LoginScreen`), o avaliador pode autenticar digitando e-mail/s
 
 ---
 
-## 3. Barra de Modo Demonstração (Homologação em Sala de Aula)
+## 3. Central de Demonstração & Barra Rápida (Homologação em Sala de Aula)
 
-Presente no topo do `HomeShellScreen`, permite testar todos os cenários críticos de campo sem sair da tela:
+A homologação acadêmica conta com uma **Central de Demonstração (Hub Modal)** acessível a qualquer momento pelo botão de laboratório (`science_rounded`) no `AppBar` superior, acompanhado de um badge dinâmico indicador de simulações ativas (`AM-04` ou `AM-12`), além da tradicional **Barra Rápida Superior** (que pode ser fixada ou ocultada conforme a preferência do avaliador):
 
-1. **Status `ONLINE` / `OFFLINE (Campo)`**: simula perda total de sinal de internet em áreas rurais remotas (**AM-04**). Quando `OFFLINE`, novos formulários são gravados localmente no SQLite com status `PENDENTE OFFLINE`.
-2. **Badge `Fila Offline: N • Sync`**: exibe em tempo real o número de registros aguardando envio e permite disparar a sincronização imediata.
-3. **Botão `Simular Falha Rede (AM-12)`**: força um erro `HTTP 503 Service Unavailable / Gateway Timeout` na próxima sincronização, demonstrando que nenhum dado ou foto local é perdido e os itens permanecem protegidos na fila para reenvio (**AM-12**).
-4. **Botão `Simular Conflito (AM-04)`**: força uma divergência de versão (`HTTP 409 Conflict`) com a plataforma central no próximo envio, habilitando o modal comparativo lado a lado (*Versão de Campo* vs *Versão da Plataforma*) com registro no histórico de auditoria (**AM-04** e **AM-11**).
-5. **Inspetor de Token JWT (`vpn_key`)**: exibe no cabeçalho o token JWT (`HS256`) assinado localmente e os escopos decodificados (`confidential_access`, `field_write_access`, `exp`).
+### Recursos da Central de Demonstração (Modal BottomSheet):
+1. **Conectividade & Simulações de Campo**:
+   - **Status `ONLINE` / `OFFLINE (Campo)`**: simula perda total de conectividade rural (**AM-04**). Novos formulários são salvos na fila SQLite local como `PENDENTE OFFLINE`.
+   - **Simular Falha de Rede (`AM-12`)**: força erro `HTTP 503` no envio, comprovando que nenhum registro ou foto local é perdido.
+   - **Simular Conflito de Sincronização (`AM-04`)**: força divergência de versão (`HTTP 409`), disparando o modal comparativo de auditoria (**AM-11**).
+2. **Controle de Perfis & Sigilo (`AM-01`)**:
+   - Alternância em 1 toque entre **Administrador**, **Equipe Técnica** e **Empresa Contratante** (com mascaramento instantâneo de dados sigilosos).
+   - **Inspetor de Token JWT**: visualizador do payload `HS256`, expiração e escopos de segurança.
+3. **Ações Rápidas de Avaliação**:
+   - **Sincronizar Fila Agora**: dispara a rotina idempotente de reenvio com feedback visual em tempo real.
+   - **Recriar / Resetar Banco SQLite**: restaura a massa inicial com dados limpos e íntegros.
+4. **Sistema Abrangente de Validação & Feedback**:
+   - *SnackBars* informativos temáticos ao alternar modos de simulação.
+   - Validação estrita no formulário de campo com alertas visuais vermelhos nos blocos pendentes (GPS obrigatório, foto obrigatória, parecer técnico).
+   - Confirmações em tempo real para captura métrica de GPS e carimbo fotográfico.
+   - *SnackBar* verde de sucesso com botão de ação `"VER NA FILA"` ao enfileirar coletas.
+   - Feedback em formulários de login e exportações de relatórios PDF/CSV.
+5. **Preferência de Exibição**:
+   - Interruptor para fixar ou ocultar a barra rápida horizontal no topo da tela (preferência persistida em `SharedPreferences`).
 
 ---
 

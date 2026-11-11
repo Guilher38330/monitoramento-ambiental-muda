@@ -17,6 +17,7 @@ class DatabaseService {
   DatabaseService._internal();
 
   Database? _database;
+  String? _customTestPath;
 
   Future<Database> get database async {
     if (_database != null && _database!.isOpen) {
@@ -28,6 +29,7 @@ class DatabaseService {
 
   /// Permite inicializar em um caminho customizado (ex.: inMemoryDatabasePath em testes automatizados).
   Future<void> initializeForTest(String customPath) async {
+    _customTestPath = customPath;
     if (_database != null && _database!.isOpen) {
       await _database!.close();
     }
@@ -75,6 +77,19 @@ class DatabaseService {
 
   /// Limpa e reinicializa o banco local com o seed caso o arquivo esteja em estado inconsistente.
   Future<void> resetDatabase() async {
+    if (_customTestPath != null) {
+      if (_database != null && _database!.isOpen) {
+        await _database!.close();
+        _database = null;
+      }
+      _database = await openDatabase(
+        _customTestPath!,
+        version: 3,
+        onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
+      );
+      return;
+    }
     if (kIsWeb) {
       databaseFactory = databaseFactoryFfiWeb;
     } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {

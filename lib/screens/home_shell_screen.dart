@@ -66,6 +66,19 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
           ],
         ),
         actions: [
+          // Botão Central de Demonstração (AM-01 a AM-12)
+          IconButton(
+            key: const Key('demo_hub_appbar_button'),
+            tooltip: 'Central de Demonstracao (AM-01 a AM-12)',
+            icon: widget.appState.hasActiveSimulations
+                ? const Badge(
+                    backgroundColor: Color(0xFFFF5722),
+                    smallSize: 8,
+                    child: Icon(Icons.science_rounded, size: 22, color: Color(0xFFA5D6A7)),
+                  )
+                : const Icon(Icons.science_rounded, size: 22, color: Color(0xFFA5D6A7)),
+            onPressed: () => _showDemoHubBottomSheet(context),
+          ),
           // Badge de Perfil (AM-01) com menu de troca rápida para demonstração
           PopupMenuButton<UserRole>(
             key: const Key('profile_switcher_menu'),
@@ -162,7 +175,7 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
       ),
       body: Column(
         children: [
-          _buildDemoModeTopBar(context),
+          if (widget.appState.showDemoQuickBar) _buildDemoModeTopBar(context),
           Expanded(
             child: _buildCurrentTabBody(context, user),
           ),
@@ -278,7 +291,15 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
               active: isOnline,
               activeColor: const Color(0xFF2E7D32),
               inactiveColor: const Color(0xFFD84315),
-              onTap: () => widget.appState.toggleOnlineStatus(),
+              onTap: () {
+                widget.appState.toggleOnlineStatus();
+                _showSnackBar(
+                  context,
+                  widget.appState.isOnline
+                      ? 'Modo ONLINE restabelecido: pronto para sincronização com o servidor.'
+                      : 'Modo OFFLINE ativado: novos formulários serão gravados na fila SQLite local (AM-04).',
+                );
+              },
             ),
             const SizedBox(width: 8),
             // Badge ao vivo da Fila Local + Ação rápida de Sincronização (AM-04)
@@ -307,7 +328,15 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
               active: simFail,
               activeColor: const Color(0xFFC62828),
               inactiveColor: const Color(0xFF37474F),
-              onTap: () => widget.appState.toggleSimulateNetworkFailure(),
+              onTap: () {
+                widget.appState.toggleSimulateNetworkFailure();
+                _showSnackBar(
+                  context,
+                  widget.appState.simulateNetworkFailure
+                      ? 'Simulação de Falha de Rede (HTTP 503 - AM-12) ATIVA: a fila local protegerá novas coletas.'
+                      : 'Simulação de Falha de Rede desativada.',
+                );
+              },
             ),
             const SizedBox(width: 8),
             // Toggle Simular Conflito de Sincronização (AM-04)
@@ -320,7 +349,15 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
               active: simConflict,
               activeColor: const Color(0xFFEF6C00),
               inactiveColor: const Color(0xFF37474F),
-              onTap: () => widget.appState.toggleSimulateConflictOnNextSync(),
+              onTap: () {
+                widget.appState.toggleSimulateConflictOnNextSync();
+                _showSnackBar(
+                  context,
+                  widget.appState.simulateConflictOnNextSync
+                      ? 'Simulação de Conflito (AM-04) ATIVA: o próximo envio gerará divergência com o servidor.'
+                      : 'Simulação de Conflito desativada.',
+                );
+              },
             ),
           ],
         ),
@@ -486,6 +523,501 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Fechar'),
           ),
+        ],
+      ),
+    );
+  }
+
+  void _showSnackBar(BuildContext context, String message, {bool isError = false}) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger != null) {
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
+          backgroundColor:
+              isError ? const Color(0xFFC62828) : const Color(0xFF1B5E20),
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
+  }
+
+  /// Central de Demonstração (AM-01 a AM-12) em Modal Bottom Sheet
+  void _showDemoHubBottomSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (bottomSheetContext) {
+        return ListenableBuilder(
+          listenable: widget.appState,
+          builder: (sheetContext, _) {
+            final isOnline = widget.appState.isOnline;
+            final simFail = widget.appState.simulateNetworkFailure;
+            final simConflict = widget.appState.simulateConflictOnNextSync;
+            final currentUser = widget.appState.currentUser;
+            final pendingCount = widget.appState.pendingSyncCount;
+
+            return Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFFF3F7F4),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(sheetContext).size.height * 0.88,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Barra para puxar / arrastar
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 10, bottom: 6),
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade400,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  // Cabeçalho da Central de Demonstração
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1B5E20).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.science_rounded,
+                            color: Color(0xFF1B5E20),
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Central de Demonstração',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1B5E20),
+                                ),
+                              ),
+                              Text(
+                                'Simulações de Campo e Avaliação Prática (AM-01 a AM-12)',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: Color(0xFF4A6552),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Fechar',
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () => Navigator.of(sheetContext).pop(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                      children: [
+                        // Card A: Conectividade & Simulações de Campo
+                        _buildDemoHubCard(
+                          title: 'Conectividade & Simulações de Campo',
+                          icon: Icons.wifi_tethering_rounded,
+                          child: Column(
+                            children: [
+                              SwitchListTile(
+                                key: const Key('demo_hub_switch_online'),
+                                secondary: Icon(
+                                  isOnline
+                                      ? Icons.cloud_done_rounded
+                                      : Icons.cloud_off_rounded,
+                                  color: isOnline
+                                      ? const Color(0xFF2E7D32)
+                                      : const Color(0xFFD84315),
+                                ),
+                                title: Text(
+                                  isOnline
+                                      ? 'Status: Dispositivo ONLINE'
+                                      : 'Status: Dispositivo OFFLINE (Campo)',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13.5,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  isOnline
+                                      ? 'Sincronização imediata ativa com o servidor'
+                                      : 'Novos registros salvos na fila local SQLite (AM-04)',
+                                  style: const TextStyle(fontSize: 11.5),
+                                ),
+                                value: isOnline,
+                                activeThumbColor: const Color(0xFF2E7D32),
+                                onChanged: (val) {
+                                  widget.appState.toggleOnlineStatus(val);
+                                  _showSnackBar(
+                                    context,
+                                    val
+                                        ? 'Modo ONLINE restabelecido: pronto para sincronização com o servidor.'
+                                        : 'Modo OFFLINE ativado: novos formulários serão gravados na fila SQLite local (AM-04).',
+                                  );
+                                },
+                              ),
+                              const Divider(height: 1),
+                              SwitchListTile(
+                                key: const Key('demo_hub_switch_net_fail'),
+                                secondary: Icon(
+                                  Icons.wifi_tethering_error_rounded,
+                                  color: simFail
+                                      ? const Color(0xFFC62828)
+                                      : Colors.grey.shade600,
+                                ),
+                                title: const Text(
+                                  'Simular Falha de Rede (AM-12)',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13.5,
+                                  ),
+                                ),
+                                subtitle: const Text(
+                                  'Simula erro HTTP 503 na sincronização e valida proteção da fila local',
+                                  style: TextStyle(fontSize: 11.5),
+                                ),
+                                value: simFail,
+                                activeThumbColor: const Color(0xFFC62828),
+                                onChanged: (val) {
+                                  widget.appState.toggleSimulateNetworkFailure(val);
+                                  _showSnackBar(
+                                    context,
+                                    val
+                                        ? 'Simulação de Falha de Rede (HTTP 503 - AM-12) ATIVA: a fila local protegerá novas coletas.'
+                                        : 'Simulação de Falha de Rede desativada.',
+                                  );
+                                },
+                              ),
+                              const Divider(height: 1),
+                              SwitchListTile(
+                                key: const Key('demo_hub_switch_conflict'),
+                                secondary: Icon(
+                                  Icons.merge_type_rounded,
+                                  color: simConflict
+                                      ? const Color(0xFFEF6C00)
+                                      : Colors.grey.shade600,
+                                ),
+                                title: const Text(
+                                  'Simular Conflito de Sincronização (AM-04)',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13.5,
+                                  ),
+                                ),
+                                subtitle: const Text(
+                                  'Gera divergência de versão com o servidor para testar resolução de conflito',
+                                  style: TextStyle(fontSize: 11.5),
+                                ),
+                                value: simConflict,
+                                activeThumbColor: const Color(0xFFEF6C00),
+                                onChanged: (val) {
+                                  widget.appState.toggleSimulateConflictOnNextSync(val);
+                                  _showSnackBar(
+                                    context,
+                                    val
+                                        ? 'Simulação de Conflito (AM-04) ATIVA: o próximo envio gerará divergência com o servidor.'
+                                        : 'Simulação de Conflito desativada.',
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // Card B: Controle de Perfis & Sigilo (AM-01)
+                        _buildDemoHubCard(
+                          title: 'Controle de Perfis & Sigilo (AM-01)',
+                          icon: Icons.shield_rounded,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Alternar Perfil Ativo Instantaneamente:',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: UserRole.values.map((role) {
+                                    final isCurrent = currentUser?.role == role;
+                                    return ChoiceChip(
+                                      key: Key('demo_hub_role_${role.name}'),
+                                      selected: isCurrent,
+                                      avatar: Icon(
+                                        role.icon,
+                                        size: 16,
+                                        color: isCurrent
+                                            ? Colors.white
+                                            : role.badgeColor,
+                                      ),
+                                      label: Text(
+                                        '${role.label} (${role.shortBadge})',
+                                        style: TextStyle(
+                                          fontWeight: isCurrent
+                                              ? FontWeight.w800
+                                              : FontWeight.w600,
+                                          fontSize: 11.5,
+                                          color: isCurrent
+                                              ? Colors.white
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                      selectedColor: role.badgeColor,
+                                      backgroundColor: Colors.white,
+                                      onSelected: (selected) async {
+                                        if (selected) {
+                                          await widget.appState
+                                              .quickLoginAsRole(role);
+                                          if (!context.mounted) return;
+                                          _showSnackBar(
+                                            context,
+                                            'Perfil alternado para ${role.label} (${role.shortBadge}).',
+                                          );
+                                        }
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    key: const Key('demo_hub_jwt_inspector_button'),
+                                    icon: const Icon(Icons.vpn_key_rounded,
+                                        size: 18),
+                                    label: const Text(
+                                      'Inspecionar Token JWT e Permissões (AM-01)',
+                                      style: TextStyle(fontSize: 12.5),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFF1B5E20),
+                                      side: const BorderSide(
+                                          color: Color(0xFF1B5E20)),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                    onPressed: () {
+                                      _showJwtInspectorDialog(context);
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // Card C: Ações Rápidas de Avaliação
+                        _buildDemoHubCard(
+                          title: 'Ações Rápidas de Avaliação',
+                          icon: Icons.flash_on_rounded,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              children: [
+                                ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0277BD)
+                                          .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(Icons.sync_rounded,
+                                        color: Color(0xFF0277BD)),
+                                  ),
+                                  title: const Text(
+                                    'Sincronizar Fila Agora',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13.5,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    '$pendingCount registro(s) pendente(s) na fila local',
+                                    style: const TextStyle(fontSize: 11.5),
+                                  ),
+                                  trailing: FilledButton.tonalIcon(
+                                    key: const Key('demo_hub_sync_now_button'),
+                                    icon: const Icon(Icons.sync, size: 16),
+                                    label: const Text('Sincronizar'),
+                                    onPressed: () {
+                                      widget.appState.synchronizePendingForms();
+                                      _showSnackBar(
+                                        context,
+                                        'Processo de sincronização da fila iniciado...',
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const Divider(),
+                                ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFD32F2F)
+                                          .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Icons.restart_alt_rounded,
+                                      color: Color(0xFFD32F2F),
+                                    ),
+                                  ),
+                                  title: const Text(
+                                    'Resetar / Recriar Banco SQLite Local',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13.5,
+                                    ),
+                                  ),
+                                  subtitle: const Text(
+                                    'Restaura dados originais de seed para nova demonstração limpa',
+                                    style: TextStyle(fontSize: 11.5),
+                                  ),
+                                  trailing: OutlinedButton(
+                                    key: const Key('demo_hub_reset_db_button'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFFD32F2F),
+                                      side: const BorderSide(
+                                          color: Color(0xFFD32F2F)),
+                                    ),
+                                    onPressed: () async {
+                                      await widget.appState
+                                          .resetDatabaseAndReload();
+                                      if (!context.mounted) return;
+                                      _showSnackBar(
+                                        context,
+                                        'Banco SQLite reiniciado com sucesso com os dados de seed originais.',
+                                      );
+                                    },
+                                    child: const Text('Resetar'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // Card D: Preferência de Exibição
+                        _buildDemoHubCard(
+                          title: 'Preferência de Exibição',
+                          icon: Icons.tune_rounded,
+                          child: SwitchListTile(
+                            key: const Key('demo_hub_toggle_quick_bar'),
+                            secondary: const Icon(
+                              Icons.view_headline_rounded,
+                              color: Color(0xFF1B5E20),
+                            ),
+                            title: const Text(
+                              'Fixar Barra Rápida no Topo da Tela',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13.5,
+                              ),
+                            ),
+                            subtitle: const Text(
+                              'Exibe a faixa horizontal de controle rápido abaixo da barra superior',
+                              style: TextStyle(fontSize: 11.5),
+                            ),
+                            value: widget.appState.showDemoQuickBar,
+                            activeThumbColor: const Color(0xFF1B5E20),
+                            onChanged: (val) {
+                              widget.appState.toggleDemoQuickBar();
+                              _showSnackBar(
+                                context,
+                                val
+                                    ? 'Barra Rápida de Demonstração fixada no topo.'
+                                    : 'Barra Rápida ocultada. Acesse sempre pela Central de Demonstração.',
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDemoHubCard({
+    required String title,
+    required IconData icon,
+    required Widget child,
+  }) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: Color(0xFFD0DDD4)),
+      ),
+      color: Colors.white,
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            color: const Color(0xFFE8F5E9).withValues(alpha: 0.6),
+            child: Row(
+              children: [
+                Icon(icon, size: 18, color: const Color(0xFF1B5E20)),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1B5E20),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          child,
         ],
       ),
     );

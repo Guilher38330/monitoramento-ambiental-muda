@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/field_form_record.dart';
 import '../models/project_models.dart';
@@ -40,6 +41,8 @@ class AppState extends ChangeNotifier {
   String? _activeJwtToken;
 
   // Controles da Barra de Modo Demonstração (para avaliação prática em sala de aula)
+  static const String prefShowDemoQuickBarKey = 'pref_show_demo_quick_bar';
+  bool _showDemoQuickBar = true;
   bool _isOnline = true;
   bool _simulateNetworkFailure = false;
   bool _simulateConflictOnNextSync = false;
@@ -75,6 +78,9 @@ class AppState extends ChangeNotifier {
   bool get isOnline => _isOnline;
   bool get simulateNetworkFailure => _simulateNetworkFailure;
   bool get simulateConflictOnNextSync => _simulateConflictOnNextSync;
+  bool get showDemoQuickBar => _showDemoQuickBar;
+  bool get hasActiveSimulations =>
+      _simulateNetworkFailure || _simulateConflictOnNextSync;
 
   String get selectedProgramFilter => _selectedProgramFilter;
   String get searchQuery => _searchQuery;
@@ -159,6 +165,16 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (prefs.containsKey(prefShowDemoQuickBarKey)) {
+          _showDemoQuickBar =
+              prefs.getBool(prefShowDemoQuickBarKey) ?? _showDemoQuickBar;
+        }
+      } catch (e) {
+        debugPrint('Erro ao carregar SharedPreferences: $e');
+      }
+
       await _loadDatabaseContent();
       final savedSession = await _dbService.getActiveSession();
       if (savedSession != null) {
@@ -181,11 +197,13 @@ class AppState extends ChangeNotifier {
   Future<void> resetDatabaseAndReload() async {
     _isLoading = true;
     _initError = null;
-    _isInitialized = false;
     notifyListeners();
 
     try {
       await _dbService.resetDatabase();
+      if (_currentUser != null && _activeJwtToken != null) {
+        await _dbService.saveSession(_currentUser!, _activeJwtToken!);
+      }
       await _loadDatabaseContent();
       _isInitialized = true;
       _initError = null;
@@ -294,6 +312,18 @@ class AppState extends ChangeNotifier {
         ? 'Simulação de Conflito (AM-04) ATIVA: o próximo envio gerará divergência de versão com o servidor.'
         : 'Simulação de Conflito desativada.';
     notifyListeners();
+  }
+
+  /// Alterna a visibilidade da barra rápida horizontal no topo e persiste a preferência.
+  Future<void> toggleDemoQuickBar() async {
+    _showDemoQuickBar = !_showDemoQuickBar;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(prefShowDemoQuickBarKey, _showDemoQuickBar);
+    } catch (e) {
+      debugPrint('Erro ao salvar $prefShowDemoQuickBarKey: $e');
+    }
   }
 
   void setProgramFilter(String filter) {

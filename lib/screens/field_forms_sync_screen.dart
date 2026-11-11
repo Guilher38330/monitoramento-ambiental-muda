@@ -846,7 +846,9 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
                       ),
                     ),
                   ),
-                if (!record.hasConflict && user.canResolveSyncConflicts)
+                if (widget.appState.isDemoModeEnabled &&
+                    !record.hasConflict &&
+                    user.canResolveSyncConflicts)
                   TextButton.icon(
                     key: Key('simulate_conflict_btn_${record.clientUuid}'),
                     onPressed: () {
@@ -1599,25 +1601,26 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        FilledButton.tonalIcon(
-                          key: const Key('capture_demo_photo_button'),
-                          onPressed: _isCapturingPhoto
-                              ? null
-                              : () => _captureDemoGeoreferencedPhoto(
-                                    selectedPoint,
-                                  ),
-                          icon: const Icon(
-                            Icons.enhance_photo_translate_rounded,
-                            size: 18,
-                          ),
-                          label: const Text(
-                            'Capturar Foto Georreferenciada de Demonstração',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 12,
+                        if (widget.appState.isDemoModeEnabled)
+                          FilledButton.tonalIcon(
+                            key: const Key('capture_demo_photo_button'),
+                            onPressed: _isCapturingPhoto
+                                ? null
+                                : () => _captureDemoGeoreferencedPhoto(
+                                      selectedPoint,
+                                    ),
+                            icon: const Icon(
+                              Icons.enhance_photo_translate_rounded,
+                              size: 18,
+                            ),
+                            label: const Text(
+                              'Capturar Foto Georreferenciada de Demonstração',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
-                        ),
                         OutlinedButton.icon(
                           key: const Key('capture_camera_photo_button'),
                           onPressed: _isCapturingPhoto

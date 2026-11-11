@@ -49,8 +49,9 @@ void main() {
       await tester.tap(demoHubBtn);
       await tester.pumpAndSettle();
 
-      // 1.1 Título do Hub
+      // 1.1 Título do Hub e Interruptor Mestre
       expect(find.text('Central de Demonstração'), findsOneWidget);
+      expect(find.byKey(const Key('demo_hub_master_switch')), findsOneWidget);
 
       // 1.2 Card A: Conectividade & Simulações de Campo
       expect(find.text('Conectividade & Simulações de Campo'), findsOneWidget);
@@ -89,6 +90,7 @@ void main() {
       await tester.runAsync(() async {
         await initTestState();
         await appState.quickLoginAsRole(UserRole.admin);
+        appState.toggleDemoMode(true);
       });
 
       tester.view.physicalSize = const Size(1080, 1920);
@@ -141,6 +143,7 @@ void main() {
       await tester.runAsync(() async {
         await initTestState();
         await appState.quickLoginAsRole(UserRole.tecnico);
+        appState.toggleDemoMode(true);
       });
 
       tester.view.physicalSize = const Size(1080, 1920);

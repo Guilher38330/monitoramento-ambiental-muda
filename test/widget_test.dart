@@ -143,6 +143,7 @@ void main() {
 
       // 1. Login rápido como Empresa Contratante (dados sigilosos devem ser mascarados)
       await tester.runAsync(() => appState.quickLoginAsRole(UserRole.empresa));
+      appState.toggleDemoMode(true);
       await tester.pumpAndSettle();
 
       expect(appState.currentUser?.role, equals(UserRole.empresa));
@@ -423,6 +424,8 @@ void main() {
       expect(appState.conflictCount, equals(0));
 
       // Coloca em Modo OFFLINE na barra superior e abre "Nova Coleta"
+      appState.toggleDemoMode(true);
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('demo_toggle_online')));
       await tester.pumpAndSettle();
       expect(appState.isOnline, isFalse);
@@ -486,6 +489,7 @@ void main() {
 
       // Alterna para o perfil Empresa Contratante e verifica mascaramento de nota sigilosa (AM-01) e bloqueio de formulário
       await tester.runAsync(() => appState.quickLoginAsRole(UserRole.empresa));
+      appState.toggleDemoMode(true);
       await tester.pumpAndSettle();
 
       expect(find.textContaining('OBSERVAÇÃO TÉCNICA SIGILOSA PROTEGIDA (AM-01)'), findsWidgets);
@@ -714,6 +718,7 @@ void main() {
 
       // 4. Alterna para o perfil Empresa Contratante (AM-01) e verifica proteção dos acordos sigilosos de solo e laudos restritos de água
       await tester.runAsync(() => appState.quickLoginAsRole(UserRole.empresa));
+      appState.toggleDemoMode(true);
       await tester.pumpAndSettle();
 
       expect(find.textContaining('ACORDO INDIVIDUAL E CAR/CPF RESTRITOS (AM-01)'), findsWidgets);
@@ -920,6 +925,7 @@ void main() {
 
       // 4. Alterna para Empresa Contratante e abre a Exportação Planilha Excel/CSV verificando mascaramento AM-01
       await tester.runAsync(() => appState.quickLoginAsRole(UserRole.empresa));
+      appState.toggleDemoMode(true);
       await tester.pumpAndSettle();
 
       final csvBtn = find.byKey(const Key('btn_export_share_csv_spreadsheet'));

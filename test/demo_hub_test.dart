@@ -25,6 +25,40 @@ void main() {
       await appState.initialize();
     });
 
+    test('AppState: gerencia isDemoModeEnabled, toggleDemoMode e reset automático de simulações', () {
+      expect(appState.isDemoModeEnabled, isFalse);
+      expect(appState.isOnline, isTrue);
+      expect(appState.simulateNetworkFailure, isFalse);
+      expect(appState.simulateConflictOnNextSync, isFalse);
+
+      // Ativa Modo Demonstração
+      appState.toggleDemoMode(true);
+      expect(appState.isDemoModeEnabled, isTrue);
+
+      // Simula modo offline
+      appState.toggleOnlineStatus(false);
+      expect(appState.isOnline, isFalse);
+
+      // Desativa modo demonstração: deve restaurar online
+      appState.toggleDemoMode(false);
+      expect(appState.isDemoModeEnabled, isFalse);
+      expect(appState.isOnline, isTrue);
+
+      // Reativa demo mode e testa simulações de falha e conflito
+      appState.toggleDemoMode(true);
+      appState.toggleSimulateNetworkFailure(true);
+      appState.toggleSimulateConflictOnNextSync(true);
+      expect(appState.simulateNetworkFailure, isTrue);
+      expect(appState.simulateConflictOnNextSync, isTrue);
+
+      // Ao desativar o Modo Demonstração, deve reverter tudo automaticamente
+      appState.toggleDemoMode(false);
+      expect(appState.isDemoModeEnabled, isFalse);
+      expect(appState.isOnline, isTrue);
+      expect(appState.simulateNetworkFailure, isFalse);
+      expect(appState.simulateConflictOnNextSync, isFalse);
+    });
+
     test('AppState: gerencia showDemoQuickBar, toggleDemoQuickBar e hasActiveSimulations', () async {
       expect(appState.showDemoQuickBar, isTrue);
       expect(appState.hasActiveSimulations, isFalse);
@@ -75,7 +109,7 @@ void main() {
     });
 
     testWidgets('Demo Hub: Abertura do BottomSheet, 4 Cards e Ações Interativas', (tester) async {
-      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.physicalSize = const Size(1080, 1920);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
         tester.view.resetPhysicalSize();
@@ -95,7 +129,25 @@ void main() {
       expect(demoHubBtn, findsOneWidget);
       expect(find.byTooltip('Central de Demonstracao (AM-01 a AM-12)'), findsOneWidget);
 
-      // Verifica que a barra rápida horizontal está visível inicialmente
+      // Verifica que o Modo Demonstração inicia DESATIVADO por padrão e a barra rápida oculta
+      expect(appState.isDemoModeEnabled, isFalse);
+      expect(find.textContaining('MODO DEMONSTRAÇÃO:'), findsNothing);
+
+      // Abre a Central de Demonstração (Modal Bottom Sheet) e ativa o Modo Demonstração
+      await tester.tap(demoHubBtn);
+      await tester.pumpAndSettle();
+
+      final masterSwitch = find.byKey(const Key('demo_hub_master_switch'));
+      expect(masterSwitch, findsOneWidget);
+      await tester.tap(masterSwitch);
+      await tester.pumpAndSettle();
+      expect(appState.isDemoModeEnabled, isTrue);
+
+      // Fecha o modal para validar a exibição da barra rápida
+      await tester.tap(find.byTooltip('Fechar'));
+      await tester.pumpAndSettle();
+
+      // Verifica que a barra rápida horizontal agora está visível
       expect(find.textContaining('MODO DEMONSTRAÇÃO:'), findsOneWidget);
 
       // Testa feedback visual dos chips na barra rápida
@@ -134,6 +186,7 @@ void main() {
 
       // Verifica cabeçalho e os primeiros cards
       expect(find.text('Central de Demonstração'), findsOneWidget);
+      expect(find.byKey(const Key('demo_hub_master_switch')), findsOneWidget);
       expect(find.text('Conectividade & Simulações de Campo'), findsOneWidget);
       expect(find.text('Controle de Perfis & Sigilo (AM-01)'), findsOneWidget);
 
@@ -208,7 +261,8 @@ void main() {
       expect(prefTitle, findsOneWidget);
 
       final quickBarToggle = find.byKey(const Key('demo_hub_toggle_quick_bar'));
-      await tester.ensureVisible(quickBarToggle);
+      await tester.scrollUntilVisible(quickBarToggle, 200,
+          scrollable: find.byType(Scrollable).last);
       await tester.tap(quickBarToggle);
       await tester.pump();
       await tester.runAsync(() async {

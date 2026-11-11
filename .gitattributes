@@ -1,0 +1,13 @@
+# GitHub Linguist language overrides
+# Garante que as estatísticas do repositório reflitam o código real do projeto (Dart)
+
+# Bibliotecas e workers para Web
+web/sqflite_sw.js linguist-vendored
+web/index.html linguist-vendored
+
+# Scripts auxiliares e ferramentas locais
+tool/*.ps1 linguist-vendored
+
+# Boilerplate padrão gerado pelo Flutter para plataformas desktop
+windows/* linguist-vendored
+linux/* linguist-vendored

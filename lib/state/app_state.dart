@@ -42,6 +42,7 @@ class AppState extends ChangeNotifier {
 
   // Controles da Barra de Modo Demonstração (para avaliação prática em sala de aula)
   static const String prefShowDemoQuickBarKey = 'pref_show_demo_quick_bar';
+  bool _isDemoModeEnabled = false;
   bool _showDemoQuickBar = true;
   bool _isOnline = true;
   bool _simulateNetworkFailure = false;
@@ -75,6 +76,7 @@ class AppState extends ChangeNotifier {
       _activeJwtToken != null &&
       JwtAuthSimulator.validateToken(_activeJwtToken!);
 
+  bool get isDemoModeEnabled => _isDemoModeEnabled;
   bool get isOnline => _isOnline;
   bool get simulateNetworkFailure => _simulateNetworkFailure;
   bool get simulateConflictOnNextSync => _simulateConflictOnNextSync;
@@ -276,6 +278,24 @@ class AppState extends ChangeNotifier {
     _currentUser = null;
     _activeJwtToken = null;
     _authError = null;
+    notifyListeners();
+  }
+
+  /// Alterna o Modo Demonstração (Simulações de Erro e Testes de Campo).
+  /// Quando desativado, restaura instantaneamente o comportamento normal de produção:
+  /// dispositivo online, sem falhas de rede forçadas e sem conflitos de versão simulados.
+  void toggleDemoMode([bool? value]) {
+    _isDemoModeEnabled = value ?? !_isDemoModeEnabled;
+    if (!_isDemoModeEnabled) {
+      _isOnline = true;
+      _simulateNetworkFailure = false;
+      _simulateConflictOnNextSync = false;
+      _lastSyncMessage =
+          'Modo Demonstração desativado: sistema operando no modo de produção padrão.';
+    } else {
+      _lastSyncMessage =
+          'Modo Demonstração ATIVADO: controles e botões de simulação liberados.';
+    }
     notifyListeners();
   }
 

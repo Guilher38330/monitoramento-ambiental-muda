@@ -90,6 +90,7 @@ void main() {
       await tester.runAsync(() async {
         await initTestState();
         await appState.quickLoginAsRole(UserRole.tecnico);
+        appState.toggleDemoMode(true);
       });
 
       tester.view.physicalSize = const Size(1080, 1920);

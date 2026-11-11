@@ -175,7 +175,9 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
       ),
       body: Column(
         children: [
-          if (widget.appState.showDemoQuickBar) _buildDemoModeTopBar(context),
+          if (widget.appState.isDemoModeEnabled &&
+              widget.appState.showDemoQuickBar)
+            _buildDemoModeTopBar(context),
           Expanded(
             child: _buildCurrentTabBody(context, user),
           ),
@@ -642,29 +644,107 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                       children: [
+                        // Card Mestre: Ativação Geral do Modo Demonstração
+                        _buildDemoHubCard(
+                          title: 'Modo Demonstração (Simulações de Erro)',
+                          icon: Icons.science_rounded,
+                          child: SwitchListTile(
+                            key: const Key('demo_hub_master_switch'),
+                            secondary: Icon(
+                              widget.appState.isDemoModeEnabled
+                                  ? Icons.science_rounded
+                                  : Icons.science_outlined,
+                              color: widget.appState.isDemoModeEnabled
+                                  ? const Color(0xFF1B5E20)
+                                  : Colors.grey.shade600,
+                              size: 26,
+                            ),
+                            title: Text(
+                              widget.appState.isDemoModeEnabled
+                                  ? 'Modo Demonstração ATIVADO'
+                                  : 'Modo Demonstração DESATIVADO',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13.5,
+                              ),
+                            ),
+                            subtitle: Text(
+                              widget.appState.isDemoModeEnabled
+                                  ? 'Simulações de falhas de rede (AM-12), conflitos (AM-04) e botões de teste habilitados'
+                                  : 'Sistema operando normalmente em produção. Ative para simular erros',
+                              style: const TextStyle(fontSize: 11.5),
+                            ),
+                            value: widget.appState.isDemoModeEnabled,
+                            activeThumbColor: const Color(0xFF1B5E20),
+                            onChanged: (val) {
+                              widget.appState.toggleDemoMode(val);
+                              _showSnackBar(
+                                context,
+                                val
+                                    ? 'Modo Demonstração ATIVADO: botões e simulações de erro habilitados.'
+                                    : 'Modo Demonstração DESATIVADO: sistema normalizado (Online e sem falhas).',
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         // Card A: Conectividade & Simulações de Campo
                         _buildDemoHubCard(
                           title: 'Conectividade & Simulações de Campo',
                           icon: Icons.wifi_tethering_rounded,
                           child: Column(
                             children: [
+                              if (!widget.appState.isDemoModeEnabled)
+                                Container(
+                                  margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFF3E0),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color: const Color(0xFFFFB74D)),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.lock_outline_rounded,
+                                          size: 16, color: Color(0xFFE65100)),
+                                      SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Ative o Modo Demonstração acima para provocar falhas de rede ou alterar a conectividade.',
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            color: Color(0xFFE65100),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               SwitchListTile(
                                 key: const Key('demo_hub_switch_online'),
                                 secondary: Icon(
                                   isOnline
                                       ? Icons.cloud_done_rounded
                                       : Icons.cloud_off_rounded,
-                                  color: isOnline
-                                      ? const Color(0xFF2E7D32)
-                                      : const Color(0xFFD84315),
+                                  color: !widget.appState.isDemoModeEnabled
+                                      ? Colors.grey.shade400
+                                      : (isOnline
+                                          ? const Color(0xFF2E7D32)
+                                          : const Color(0xFFD84315)),
                                 ),
                                 title: Text(
                                   isOnline
                                       ? 'Status: Dispositivo ONLINE'
                                       : 'Status: Dispositivo OFFLINE (Campo)',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.w700,
                                     fontSize: 13.5,
+                                    color: !widget.appState.isDemoModeEnabled
+                                        ? Colors.grey.shade600
+                                        : null,
                                   ),
                                 ),
                                 subtitle: Text(
@@ -675,30 +755,37 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
                                 ),
                                 value: isOnline,
                                 activeThumbColor: const Color(0xFF2E7D32),
-                                onChanged: (val) {
-                                  widget.appState.toggleOnlineStatus(val);
-                                  _showSnackBar(
-                                    context,
-                                    val
-                                        ? 'Modo ONLINE restabelecido: pronto para sincronização com o servidor.'
-                                        : 'Modo OFFLINE ativado: novos formulários serão gravados na fila SQLite local (AM-04).',
-                                  );
-                                },
+                                onChanged: !widget.appState.isDemoModeEnabled
+                                    ? null
+                                    : (val) {
+                                        widget.appState.toggleOnlineStatus(val);
+                                        _showSnackBar(
+                                          context,
+                                          val
+                                              ? 'Modo ONLINE restabelecido: pronto para sincronização com o servidor.'
+                                              : 'Modo OFFLINE ativado: novos formulários serão gravados na fila SQLite local (AM-04).',
+                                        );
+                                      },
                               ),
                               const Divider(height: 1),
                               SwitchListTile(
                                 key: const Key('demo_hub_switch_net_fail'),
                                 secondary: Icon(
                                   Icons.wifi_tethering_error_rounded,
-                                  color: simFail
-                                      ? const Color(0xFFC62828)
-                                      : Colors.grey.shade600,
+                                  color: !widget.appState.isDemoModeEnabled
+                                      ? Colors.grey.shade400
+                                      : (simFail
+                                          ? const Color(0xFFC62828)
+                                          : Colors.grey.shade600),
                                 ),
-                                title: const Text(
+                                title: Text(
                                   'Simular Falha de Rede (AM-12)',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w700,
                                     fontSize: 13.5,
+                                    color: !widget.appState.isDemoModeEnabled
+                                        ? Colors.grey.shade600
+                                        : null,
                                   ),
                                 ),
                                 subtitle: const Text(
@@ -707,30 +794,38 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
                                 ),
                                 value: simFail,
                                 activeThumbColor: const Color(0xFFC62828),
-                                onChanged: (val) {
-                                  widget.appState.toggleSimulateNetworkFailure(val);
-                                  _showSnackBar(
-                                    context,
-                                    val
-                                        ? 'Simulação de Falha de Rede (HTTP 503 - AM-12) ATIVA: a fila local protegerá novas coletas.'
-                                        : 'Simulação de Falha de Rede desativada.',
-                                  );
-                                },
+                                onChanged: !widget.appState.isDemoModeEnabled
+                                    ? null
+                                    : (val) {
+                                        widget.appState
+                                            .toggleSimulateNetworkFailure(val);
+                                        _showSnackBar(
+                                          context,
+                                          val
+                                              ? 'Simulação de Falha de Rede (HTTP 503 - AM-12) ATIVA: a fila local protegerá novas coletas.'
+                                              : 'Simulação de Falha de Rede desativada.',
+                                        );
+                                      },
                               ),
                               const Divider(height: 1),
                               SwitchListTile(
                                 key: const Key('demo_hub_switch_conflict'),
                                 secondary: Icon(
                                   Icons.merge_type_rounded,
-                                  color: simConflict
-                                      ? const Color(0xFFEF6C00)
-                                      : Colors.grey.shade600,
+                                  color: !widget.appState.isDemoModeEnabled
+                                      ? Colors.grey.shade400
+                                      : (simConflict
+                                          ? const Color(0xFFEF6C00)
+                                          : Colors.grey.shade600),
                                 ),
-                                title: const Text(
+                                title: Text(
                                   'Simular Conflito de Sincronização (AM-04)',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w700,
                                     fontSize: 13.5,
+                                    color: !widget.appState.isDemoModeEnabled
+                                        ? Colors.grey.shade600
+                                        : null,
                                   ),
                                 ),
                                 subtitle: const Text(
@@ -739,15 +834,18 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
                                 ),
                                 value: simConflict,
                                 activeThumbColor: const Color(0xFFEF6C00),
-                                onChanged: (val) {
-                                  widget.appState.toggleSimulateConflictOnNextSync(val);
-                                  _showSnackBar(
-                                    context,
-                                    val
-                                        ? 'Simulação de Conflito (AM-04) ATIVA: o próximo envio gerará divergência com o servidor.'
-                                        : 'Simulação de Conflito desativada.',
-                                  );
-                                },
+                                onChanged: !widget.appState.isDemoModeEnabled
+                                    ? null
+                                    : (val) {
+                                        widget.appState
+                                            .toggleSimulateConflictOnNextSync(val);
+                                        _showSnackBar(
+                                          context,
+                                          val
+                                              ? 'Simulação de Conflito (AM-04) ATIVA: o próximo envio gerará divergência com o servidor.'
+                                              : 'Simulação de Conflito desativada.',
+                                        );
+                                      },
                               ),
                             ],
                           ),

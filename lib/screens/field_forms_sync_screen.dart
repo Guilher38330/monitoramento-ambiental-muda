@@ -64,6 +64,10 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
   bool _isCapturingPhoto = false;
 
   String? _formValidationBannerError;
+  bool _highlightMissingTerritory = false;
+  bool _highlightMissingForm = false;
+  bool _highlightMissingGps = false;
+  bool _highlightMissingPhoto = false;
 
   @override
   void initState() {
@@ -1061,7 +1065,12 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
               color: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
-                side: const BorderSide(color: Color(0xFFD5E2D9)),
+                side: BorderSide(
+                  color: _highlightMissingTerritory
+                      ? const Color(0xFFC62828)
+                      : const Color(0xFFD5E2D9),
+                  width: _highlightMissingTerritory ? 1.8 : 1.0,
+                ),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -1076,6 +1085,35 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
                         color: Color(0xFF1B4327),
                       ),
                     ),
+                    if (_highlightMissingTerritory) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        key: const Key('territory_validation_banner'),
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFEBEE),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFEF9A9A)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFC62828)),
+                            SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Atenção: Selecione Projeto, Propriedade e Ponto de Coleta.',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFC62828),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       key: const Key('dropdown_project'),
@@ -1111,6 +1149,7 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
                           _selectedPropertyId = firstPropId;
                           _selectedPointId =
                               pts.isNotEmpty ? pts.first.id : null;
+                          _highlightMissingTerritory = false;
                         });
                       },
                     ),
@@ -1142,6 +1181,7 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
                           _selectedPropertyId = val;
                           _selectedPointId =
                               pts.isNotEmpty ? pts.first.id : null;
+                          _highlightMissingTerritory = false;
                         });
                       },
                     ),
@@ -1169,6 +1209,7 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
                       onChanged: (val) {
                         setState(() {
                           _selectedPointId = val;
+                          _highlightMissingTerritory = false;
                         });
                       },
                     ),
@@ -1183,7 +1224,12 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
               color: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
-                side: const BorderSide(color: Color(0xFFD5E2D9)),
+                side: BorderSide(
+                  color: _highlightMissingForm
+                      ? const Color(0xFFC62828)
+                      : const Color(0xFFD5E2D9),
+                  width: _highlightMissingForm ? 1.8 : 1.0,
+                ),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -1198,6 +1244,35 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
                         color: Color(0xFF1B4327),
                       ),
                     ),
+                    if (_highlightMissingForm) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        key: const Key('form_fields_validation_banner'),
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFEBEE),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFEF9A9A)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFC62828)),
+                            SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Atenção: Preencha os campos obrigatórios do parecer técnico.',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFC62828),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       key: const Key('dropdown_template'),
@@ -1381,7 +1456,12 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
               color: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
-                side: const BorderSide(color: Color(0xFFD5E2D9)),
+                side: BorderSide(
+                  color: (_highlightMissingGps || _highlightMissingPhoto)
+                      ? const Color(0xFFC62828)
+                      : const Color(0xFFD5E2D9),
+                  width: (_highlightMissingGps || _highlightMissingPhoto) ? 1.8 : 1.0,
+                ),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -1396,6 +1476,64 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
                         color: Color(0xFF1B4327),
                       ),
                     ),
+                    if (_highlightMissingGps) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        key: const Key('gps_validation_banner'),
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFEBEE),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFEF9A9A)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFC62828)),
+                            SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Atenção: Capture as coordenadas GPS para validar a coleta.',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFC62828),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (_highlightMissingPhoto) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        key: const Key('photo_validation_banner'),
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFEBEE),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFEF9A9A)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFC62828)),
+                            SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Atenção: Anexe uma foto georreferenciada antes de salvar.',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFC62828),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 10),
                     // Bloco GPS
                     Row(
@@ -1649,6 +1787,36 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
     );
   }
 
+  void _showGpsSuccessSnackBar() {
+    if (!mounted) return;
+    final lat = _capturedLatitude!;
+    final lng = _capturedLongitude!;
+    final acc = _capturedAccuracyMeters ?? 3.2;
+
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF2E7D32),
+        behavior: SnackBarBehavior.floating,
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Coordenadas GPS capturadas: Lat ${lat.toStringAsFixed(4)}, Long ${lng.toStringAsFixed(4)} (Precisão: ±${acc.toStringAsFixed(1)}m)',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Captura coordenadas GPS usando `geolocator` com fallback gracioso e realista
   /// para as coordenadas reais do ponto de coleta no emulador/ambiente de teste (AM-05, AM-12).
   Future<void> _captureGpsCoordinates(CollectionPoint? point) async {
@@ -1688,7 +1856,9 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
             _gpsCaptureStatusText =
                 'Sinal GNSS de hardware capturado em tempo real.';
             _isCapturingGps = false;
+            _highlightMissingGps = false;
           });
+          _showGpsSuccessSnackBar();
           return;
         }
       }
@@ -1704,7 +1874,9 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
       _gpsCaptureStatusText =
           'Coordenadas georreferenciadas do Ponto ${point?.code ?? "PC"} aplicadas (Fallback seguro de Hardware/Emulador — AM-05/AM-12).';
       _isCapturingGps = false;
+      _highlightMissingGps = false;
     });
+    _showGpsSuccessSnackBar();
   }
 
   /// Gera instantaneamente uma foto georreferenciada de demonstração com carimbo de
@@ -1726,7 +1898,33 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
       _photoCaptionController.text =
           'Registro Fotográfico ${point?.code ?? "Campo"} — GPS ${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)} (±${acc.toStringAsFixed(1)}m)';
       _formValidationBannerError = null;
+      _highlightMissingPhoto = false;
     });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF2E7D32),
+          behavior: SnackBarBehavior.floating,
+          content: Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: Colors.white),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Foto georreferenciada carimbada com sucesso!',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
 
   /// Abre a câmera/galeria via `image_picker` com fallback seguro caso o emulador não possua câmera (AM-12).
@@ -1756,7 +1954,33 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
           _photoCaptionController.text =
               'Foto Câmera (${picked.name}) — GPS ${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}';
           _isCapturingPhoto = false;
+          _highlightMissingPhoto = false;
         });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Color(0xFF2E7D32),
+              behavior: SnackBarBehavior.floating,
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle_rounded, color: Colors.white),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Foto anexada com sucesso ao formulário de campo!',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
         return;
       }
     } catch (_) {
@@ -1773,41 +1997,64 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
   }
 
   Future<void> _submitFieldForm(CollectionPoint? point) async {
-    setState(() {
-      _formValidationBannerError = null;
-    });
-
-    if (!_formKey.currentState!.validate()) {
-      setState(() {
-        _formValidationBannerError =
-            'Verifique os campos obrigatórios destacados antes de salvar (AM-03).';
-      });
-      return;
-    }
-
-    if (_selectedProjectId == null ||
+    final isFormValid = _formKey.currentState!.validate();
+    final territoryMissing = _selectedProjectId == null ||
         _selectedPropertyId == null ||
-        _selectedPointId == null) {
-      setState(() {
-        _formValidationBannerError =
-            'Selecione o Projeto, a Propriedade e o Ponto de Coleta (AM-05).';
-      });
-      return;
-    }
+        _selectedPointId == null;
+    final gpsMissing = _capturedLatitude == null || _capturedLongitude == null;
+    final photoMissing =
+        _capturedPhotoPath == null || _capturedPhotoPath!.trim().isEmpty;
 
-    if (_capturedLatitude == null || _capturedLongitude == null) {
-      setState(() {
-        _formValidationBannerError =
-            'Capture as coordenadas GPS do ponto antes de salvar o formulário (AM-05).';
-      });
-      return;
-    }
+    if (!isFormValid || territoryMissing || gpsMissing || photoMissing) {
+      final missingParts = <String>[];
+      if (!isFormValid) missingParts.add('preencha os campos obrigatórios');
+      if (territoryMissing) missingParts.add('selecione projeto, propriedade e ponto');
+      if (gpsMissing) missingParts.add('capture as coordenadas GPS');
+      if (photoMissing) missingParts.add('anexe uma foto');
 
-    if (_capturedPhotoPath == null || _capturedPhotoPath!.trim().isEmpty) {
+      final String missingSummary;
+      if (missingParts.length == 1) {
+        missingSummary = missingParts.first;
+      } else if (missingParts.length == 2) {
+        missingSummary = '${missingParts[0]} e ${missingParts[1]}';
+      } else {
+        missingSummary =
+            '${missingParts.sublist(0, missingParts.length - 1).join(', ')} e ${missingParts.last}';
+      }
+
+      final errorText =
+          'Preencha os campos obrigatórios: $missingSummary antes de salvar.';
+
       setState(() {
-        _formValidationBannerError =
-            'Anexe ou capture uma foto georreferenciada antes de salvar o registro (AM-05).';
+        _formValidationBannerError = errorText;
+        _highlightMissingForm = !isFormValid;
+        _highlightMissingTerritory = territoryMissing;
+        _highlightMissingGps = gpsMissing;
+        _highlightMissingPhoto = photoMissing;
       });
+
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFC62828),
+          behavior: SnackBarBehavior.floating,
+          content: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  errorText,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
       return;
     }
 
@@ -1840,13 +2087,52 @@ class _FieldFormsSyncScreenState extends State<FieldFormsSyncScreen> {
 
     if (!mounted || saved == null) return;
 
-    // Limpa campos para nova coleta e redireciona para a Fila de Sincronização
+    // Limpa campos para nova coleta e disponibiliza navegação para a Fila de Sincronização
     setState(() {
       _technicalNotesController.clear();
       _capturedPhotoPath = null;
       _capturedPhotoTimestamp = null;
+      _formValidationBannerError = null;
+      _highlightMissingTerritory = false;
+      _highlightMissingForm = false;
+      _highlightMissingGps = false;
+      _highlightMissingPhoto = false;
       _activeSubTabIndex = 0;
     });
+
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF2E7D32),
+        behavior: SnackBarBehavior.floating,
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Coleta registrada com sucesso na fila local! (Status: ${saved.syncStatus.shortBadge})',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: 'VER NA FILA',
+          textColor: const Color(0xFFA5D6A7),
+          onPressed: () {
+            if (mounted) {
+              setState(() {
+                _activeSubTabIndex = 0;
+              });
+            }
+          },
+        ),
+      ),
+    );
   }
 
   // ===========================================================================

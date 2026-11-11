@@ -30,11 +30,64 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _submitForm() async {
-    if (!_formKey.currentState!.validate()) return;
-    await widget.appState.loginWithCredentials(
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFFC62828),
+          behavior: SnackBarBehavior.floating,
+          content: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.white),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Preencha os campos de acesso corretamente: e-mail válido e senha mínima de 6 caracteres.',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
+
+    final success = await widget.appState.loginWithCredentials(
       _emailController.text,
       _passwordController.text,
     );
+
+    if (!mounted) return;
+    if (!success || widget.appState.authError != null) {
+      final errorMsg = widget.appState.authError ??
+          'Falha na autenticação. Verifique seu e-mail e senha.';
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFC62828),
+          behavior: SnackBarBehavior.floating,
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  errorMsg,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _selectQuickProfile(AppUser demoUser) async {
@@ -391,6 +444,7 @@ class _LoginScreenState extends State<LoginScreen> {
               TextFormField(
                 key: const Key('login_email_field'),
                 controller: _emailController,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   labelText: 'E-mail Institucional',
@@ -404,7 +458,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   if (value == null || value.trim().isEmpty) {
                     return 'Informe o e-mail de acesso.';
                   }
-                  if (!value.contains('@')) {
+                  final trimmed = value.trim();
+                  if (!trimmed.contains('@') || !trimmed.contains('.') || trimmed.length < 5) {
                     return 'Informe um e-mail válido.';
                   }
                   return null;
@@ -414,6 +469,7 @@ class _LoginScreenState extends State<LoginScreen> {
               TextFormField(
                 key: const Key('login_password_field'),
                 controller: _passwordController,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 obscureText: _obscurePassword,
                 decoration: InputDecoration(
                   labelText: 'Senha (padrão demo: 123456)',
@@ -437,6 +493,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'Informe a senha de acesso.';
+                  }
+                  if (value.trim().length < 6) {
+                    return 'A senha deve conter no mínimo 6 caracteres.';
                   }
                   return null;
                 },
